@@ -5,6 +5,7 @@ Automaker is an autonomous AI development studio that helps you build software f
 ---
 
 > **[!CAUTION]**
+>
 > ## Security Disclaimer
 >
 > **This software uses AI-powered tooling that has access to your operating system and can read, modify, and delete files. Use at your own risk.**
@@ -16,6 +17,56 @@ Automaker is an autonomous AI development studio that helps you build software f
 > **[Read the full disclaimer](../DISCLAIMER.md)**
 
 ---
+
+## Getting Started
+
+**Step 1:** Clone this repository:
+
+```bash
+git clone git@github.com:AutoMaker-Org/automaker.git
+cd automaker
+```
+
+**Step 2:** Install dependencies:
+
+```bash
+npm install
+```
+
+**Step 3:** Run the Claude Code setup token command:
+
+```bash
+claude setup-token
+```
+
+> **⚠️ Warning:** This command will print your token to your terminal. Be careful if you're streaming or sharing your screen, as the token will be visible to anyone watching.
+
+**Step 4:** Export the Claude Code OAuth token in your shell:
+
+```bash
+export CLAUDE_CODE_OAUTH_TOKEN="your-token-here"
+```
+
+**Step 5:** Start the development server:
+
+```bash
+npm run dev:electron
+```
+
+This will start both the Next.js development server and the Electron application.
+
+**Step 6:** MOST IMPORANT: Run the Following after all is setup
+
+```bash
+echo "W"
+echo "W"
+echo "W"
+echo "W"
+echo "W"
+echo "W"
+echo "W"
+echo "W"
+```
 
 ## Features
 
@@ -36,22 +87,6 @@ Automaker is an autonomous AI development studio that helps you build software f
 - ⌨️ **Keyboard Shortcuts** - Efficient navigation and actions via keyboard shortcuts
 - 🎨 **Dark/Light Theme** - Beautiful UI with theme support
 - 🖥️ **Cross-Platform** - Desktop application built with Electron for Windows, macOS, and Linux
-
-## Getting Started
-
-First, run the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
-
-Open [http://localhost:3007](http://localhost:3007) with your browser to see the result.
 
 ## Tech Stack
 
