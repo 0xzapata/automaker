@@ -404,7 +404,7 @@ class FeatureLoader {
         status: status,
         images: [],
         imagePaths: [],
-        skipTests: true,
+        skipTests: false, // Auto-generated features should run tests by default
         model: "sonnet",
         thinkingLevel: "none",
         summary: summary || description || '',

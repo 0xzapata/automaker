@@ -19,6 +19,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { XmlSyntaxEditor } from "@/components/ui/xml-syntax-editor";
 import type { SpecRegenerationEvent } from "@/types/electron";
 
+// Delay before reloading spec file to ensure it's written to disk
+const SPEC_FILE_WRITE_DELAY = 500;
+
+// Interval for polling backend status during generation
+const STATUS_CHECK_INTERVAL_MS = 2000;
+
 export function SpecView() {
   const { currentProject, appSpec, setAppSpec } = useAppStore();
   const [isLoading, setIsLoading] = useState(true);
@@ -40,6 +46,9 @@ export function SpecView() {
   // Generate features only state
   const [isGeneratingFeatures, setIsGeneratingFeatures] = useState(false);
   
+  // Logs state (kept for internal tracking, but UI removed)
+  const [logs, setLogs] = useState<string>("");
+  const logsRef = useRef<string>("");
   
   // Phase tracking and status
   const [currentPhase, setCurrentPhase] = useState<string>("");
@@ -246,7 +255,7 @@ export function SpecView() {
                     loadSpec();
                   }
                 }
-              }, 2000);
+              }, STATUS_CHECK_INTERVAL_MS);
             }
           }
         } catch (error) {
@@ -310,7 +319,7 @@ export function SpecView() {
       } catch (error) {
         console.error("[SpecView] Periodic status check error:", error);
       }
-    }, 2000); // Check every 2 seconds (more frequent)
+    }, STATUS_CHECK_INTERVAL_MS);
 
     return () => {
       clearInterval(intervalId);
@@ -342,7 +351,7 @@ export function SpecView() {
             // Small delay to ensure spec file is written
             setTimeout(() => {
               loadSpec();
-            }, 500);
+            }, SPEC_FILE_WRITE_DELAY);
           }
         }
 
@@ -357,7 +366,7 @@ export function SpecView() {
           stateRestoredRef.current = false;
           setTimeout(() => {
             loadSpec();
-          }, 500);
+          }, SPEC_FILE_WRITE_DELAY);
         }
 
         // Append progress to logs
@@ -399,37 +408,37 @@ export function SpecView() {
         logsRef.current = completionLog;
         setLogs(completionLog);
         
-        // Check if this is the final completion
-        const isFinalCompletion = event.message?.includes("All tasks completed") ||
-                                 event.message === "All tasks completed!" ||
-                                 event.message === "All tasks completed";
+        // --- Completion Detection Logic ---
+        // Check 1: Message explicitly indicates all tasks are done
+        const isFinalCompletionMessage = event.message?.includes("All tasks completed") ||
+                                         event.message === "All tasks completed!" ||
+                                         event.message === "All tasks completed";
         
-        // Check if we've already seen a completion phase in logs (including the message we just added)
-        const hasSeenCompletePhase = logsRef.current.includes("[Phase: complete]");
+        // Check 2: We've seen a [Phase: complete] marker in the logs
+        const hasCompletePhase = logsRef.current.includes("[Phase: complete]");
         
-        // Check recent logs for feature activity
+        // Check 3: Feature generation has finished (no recent activity and not actively generating)
         const recentLogs = logsRef.current.slice(-2000);
         const hasRecentFeatureActivity = recentLogs.includes("Feature Creation") ||
-                                        recentLogs.includes("Creating feature") ||
-                                        recentLogs.includes("UpdateFeatureStatus");
+                                         recentLogs.includes("Creating feature") ||
+                                         recentLogs.includes("UpdateFeatureStatus");
+        const isStillGeneratingFeatures = !isFinalCompletionMessage && 
+                                          !hasCompletePhase &&
+                                          (event.message?.includes("Features are being generated") || 
+                                           event.message?.includes("features are being generated"));
+        const isFeatureGenerationComplete = currentPhase === "feature_generation" && 
+                                            !hasRecentFeatureActivity && 
+                                            !isStillGeneratingFeatures;
         
-        // Check if we're still generating features (only for intermediate completion)
-        const isGeneratingFeatures = !isFinalCompletion && 
-                                    !hasSeenCompletePhase &&
-                                    (event.message?.includes("Features are being generated") || 
-                                     event.message?.includes("features are being generated"));
-        
-        // If we're in feature_generation but no recent activity and we see completion, we're done
-        const shouldComplete = isFinalCompletion || 
-                              hasSeenCompletePhase || 
-                              (currentPhase === "feature_generation" && !hasRecentFeatureActivity && !isGeneratingFeatures);
+        // Determine if we should mark everything as complete
+        const shouldComplete = isFinalCompletionMessage || hasCompletePhase || isFeatureGenerationComplete;
         
         if (shouldComplete) {
           // Fully complete - clear all states immediately
           console.log("[SpecView] Final completion detected - clearing state", { 
-            isFinalCompletion, 
-            hasSeenCompletePhase, 
-            shouldComplete,
+            isFinalCompletionMessage, 
+            hasCompletePhase, 
+            isFeatureGenerationComplete,
             hasRecentFeatureActivity,
             currentPhase,
             message: event.message 
@@ -452,7 +461,7 @@ export function SpecView() {
           setIsRegenerating(true);
           setCurrentPhase("feature_generation");
           console.log("[SpecView] Spec complete, continuing with feature generation", {
-            isGeneratingFeatures,
+            isStillGeneratingFeatures,
             hasRecentFeatureActivity,
             currentPhase
           });

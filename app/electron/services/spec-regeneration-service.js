@@ -461,8 +461,7 @@ Use the UpdateFeatureStatus tool to create features with ALL the fields above.`,
       const currentQuery = query({ prompt, options });
       execution.query = currentQuery;
       
-      let toolCallCount = 0;
-      let messageCount = 0;
+      const counters = { toolCallCount: 0, messageCount: 0 };
       
       try {
         for await (const msg of currentQuery) {
@@ -472,67 +471,11 @@ Use the UpdateFeatureStatus tool to create features with ALL the fields above.`,
           }
           
           if (msg.type === "assistant" && msg.message?.content) {
-            messageCount++;
-            for (const block of msg.message.content) {
-              if (block.type === "text") {
-                const preview = block.text.substring(0, 100).replace(/\n/g, " ");
-                console.log(`[SpecRegeneration] Feature gen message #${messageCount}: ${preview}...`);
-                sendToRenderer({
-                  type: "spec_regeneration_progress",
-                  content: block.text,
-                });
-              } else if (block.type === "tool_use") {
-                toolCallCount++;
-                const toolName = block.name;
-                const toolInput = block.input;
-                console.log(`[SpecRegeneration] Feature gen tool call #${toolCallCount}: ${toolName}`);
-                
-                if (toolName === "mcp__automaker-tools__UpdateFeatureStatus" || toolName === "UpdateFeatureStatus") {
-                  const featureId = toolInput?.featureId || "unknown";
-                  const status = toolInput?.status || "unknown";
-                  const summary = toolInput?.summary || "";
-                  sendToRenderer({
-                    type: "spec_regeneration_progress",
-                    content: `\n[Feature Creation] Creating feature "${featureId}" with status "${status}"${summary ? `\n  Summary: ${summary}` : ""}\n`,
-                  });
-                } else {
-                  sendToRenderer({
-                    type: "spec_regeneration_progress",
-                    content: `\n[Tool] Using ${toolName}...\n`,
-                  });
-                }
-                
-                sendToRenderer({
-                  type: "spec_regeneration_tool",
-                  tool: toolName,
-                  input: toolInput,
-                });
-              }
-            }
+            this._handleAssistantMessage(msg, sendToRenderer, counters);
           } else if (msg.type === "tool_result") {
-            const toolName = msg.toolName || "unknown";
-            const result = msg.content?.[0]?.text || JSON.stringify(msg.content);
-            const resultPreview = result.substring(0, 200).replace(/\n/g, " ");
-            console.log(`[SpecRegeneration] Feature gen tool result (${toolName}): ${resultPreview}...`);
-            
-            if (toolName === "mcp__automaker-tools__UpdateFeatureStatus" || toolName === "UpdateFeatureStatus") {
-              sendToRenderer({
-                type: "spec_regeneration_progress",
-                content: `[Feature Creation] ${result}\n`,
-              });
-            } else {
-              sendToRenderer({
-                type: "spec_regeneration_progress",
-                content: `[Tool Result] ${toolName} completed successfully\n`,
-              });
-            }
+            this._handleToolResult(msg, sendToRenderer);
           } else if (msg.type === "error") {
-            const errorMsg = msg.error?.message || JSON.stringify(msg.error);
-            console.error(`[SpecRegeneration] ERROR in feature generation stream: ${errorMsg}`);
-            sendToRenderer({
-              type: "spec_regeneration_error",
-              error: `Error during feature generation: ${errorMsg}`,
-            });
+            this._handleStreamError(msg, sendToRenderer);
           }
         }
       } catch (streamError) {
@@ -544,7 +487,7 @@ Use the UpdateFeatureStatus tool to create features with ALL the fields above.`,
         throw streamError;
       }
       
-      console.log(`[SpecRegeneration] Feature generation completed - ${messageCount} messages, ${toolCallCount} tool calls`);
+      console.log(`[SpecRegeneration] Feature generation completed - ${counters.messageCount} messages, ${counters.toolCallCount} tool calls`);
       
       execution.query = null;
       execution.abortController = null;
@@ -1001,6 +944,94 @@ Use this general structure:
 - The more detailed and complete the spec, the better
 
 Begin by exploring the project structure.`;
+  }
+
+  /**
+   * Handle assistant message in feature generation stream
+   * @private
+   */
+  _handleAssistantMessage(msg, sendToRenderer, counters) {
+    counters.messageCount++;
+    for (const block of msg.message.content) {
+      if (block.type === "text") {
+        const preview = block.text.substring(0, 100).replace(/\n/g, " ");
+        console.log(`[SpecRegeneration] Feature gen message #${counters.messageCount}: ${preview}...`);
+        sendToRenderer({
+          type: "spec_regeneration_progress",
+          content: block.text,
+        });
+      } else if (block.type === "tool_use") {
+        this._handleToolUse(block, sendToRenderer, counters);
+      }
+    }
+  }
+
+  /**
+   * Handle tool use block in feature generation stream
+   * @private
+   */
+  _handleToolUse(block, sendToRenderer, counters) {
+    counters.toolCallCount++;
+    const toolName = block.name;
+    const toolInput = block.input;
+    console.log(`[SpecRegeneration] Feature gen tool call #${counters.toolCallCount}: ${toolName}`);
+    
+    if (toolName === "mcp__automaker-tools__UpdateFeatureStatus" || toolName === "UpdateFeatureStatus") {
+      const featureId = toolInput?.featureId || "unknown";
+      const status = toolInput?.status || "unknown";
+      const summary = toolInput?.summary || "";
+      sendToRenderer({
+        type: "spec_regeneration_progress",
+        content: `\n[Feature Creation] Creating feature "${featureId}" with status "${status}"${summary ? `\n  Summary: ${summary}` : ""}\n`,
+      });
+    } else {
+      sendToRenderer({
+        type: "spec_regeneration_progress",
+        content: `\n[Tool] Using ${toolName}...\n`,
+      });
+    }
+    
+    sendToRenderer({
+      type: "spec_regeneration_tool",
+      tool: toolName,
+      input: toolInput,
+    });
+  }
+
+  /**
+   * Handle tool result in feature generation stream
+   * @private
+   */
+  _handleToolResult(msg, sendToRenderer) {
+    const toolName = msg.toolName || "unknown";
+    const result = msg.content?.[0]?.text || JSON.stringify(msg.content);
+    const resultPreview = result.substring(0, 200).replace(/\n/g, " ");
+    console.log(`[SpecRegeneration] Feature gen tool result (${toolName}): ${resultPreview}...`);
+    
+    if (toolName === "mcp__automaker-tools__UpdateFeatureStatus" || toolName === "UpdateFeatureStatus") {
+      sendToRenderer({
+        type: "spec_regeneration_progress",
+        content: `[Feature Creation] ${result}\n`,
+      });
+    } else {
+      sendToRenderer({
+        type: "spec_regeneration_progress",
+        content: `[Tool Result] ${toolName} completed successfully\n`,
+      });
+    }
+  }
+
+  /**
+   * Handle error in feature generation stream
+   * @private
+   */
+  _handleStreamError(msg, sendToRenderer) {
+    const errorMsg = msg.error?.message || JSON.stringify(msg.error);
+    console.error(`[SpecRegeneration] ERROR in feature generation stream: ${errorMsg}`);
+    sendToRenderer({
+      type: "spec_regeneration_error",
+      error: `Error during feature generation: ${errorMsg}`,
+    });
   }
 
   /**
