@@ -1136,7 +1136,7 @@ export function Sidebar() {
       {/* Bottom Section - Running Agents / Bug Report / Settings */}
       <div className="border-t border-sidebar-border bg-sidebar-accent/10 shrink-0">
         {/* Course Promo Badge */}
-        <CoursePromoBadge />
+        <CoursePromoBadge sidebarOpen={sidebarOpen} />
         {/* Running Agents Link */}
         <div className="p-2 pb-0">
           <button
