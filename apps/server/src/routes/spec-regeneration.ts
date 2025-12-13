@@ -355,9 +355,6 @@ Format your response as markdown. Be specific and actionable.`;
       } else if (msg.type === "result" && (msg as any).subtype === "success") {
         console.log("[SpecRegeneration] Received success result");
         responseText = (msg as any).result || responseText;
-      } else if (msg.type === "error") {
-        console.error("[SpecRegeneration] ❌ Received error message from stream:");
-        console.error("[SpecRegeneration] Error message:", JSON.stringify(msg, null, 2));
       }
     }
   } catch (streamError) {
@@ -505,9 +502,6 @@ Generate 5-15 features that build on each other logically.`;
       } else if (msg.type === "result" && (msg as any).subtype === "success") {
         console.log("[SpecRegeneration] Received success result for features");
         responseText = (msg as any).result || responseText;
-      } else if (msg.type === "error") {
-        console.error("[SpecRegeneration] ❌ Received error message from feature stream:");
-        console.error("[SpecRegeneration] Error message:", JSON.stringify(msg, null, 2));
       }
     }
   } catch (streamError) {

@@ -7,7 +7,6 @@ import { Router, type Request, type Response } from "express";
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
-import os from "os";
 import { validatePath, addAllowedPath, isPathAllowed } from "../lib/security.js";
 import type { EventEmitter } from "../lib/events.js";
 
