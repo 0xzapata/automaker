@@ -68,58 +68,131 @@ function findArtifacts(dir, pattern) {
 async function checkUrlAccessible(url, maxRetries = 10, initialDelay = 1000) {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const isAccessible = await new Promise((resolve, reject) => {
+      const result = await new Promise((resolve, reject) => {
         const request = https.get(url, { timeout: 10000 }, (response) => {
-          // Follow redirects immediately (no retry needed for redirects)
-          if (response.statusCode === 302 || response.statusCode === 301) {
-            response.destroy();
+          const statusCode = response.statusCode;
+
+          // Follow redirects
+          if (
+            statusCode === 302 ||
+            statusCode === 301 ||
+            statusCode === 307 ||
+            statusCode === 308
+          ) {
             const redirectUrl = response.headers.location;
-            // Recursively check the redirect URL, but only once (no retries)
+            response.destroy();
+            if (!redirectUrl) {
+              resolve({
+                accessible: false,
+                statusCode,
+                error: "Redirect without location header",
+              });
+              return;
+            }
+            // Follow the redirect URL
             return https
               .get(redirectUrl, { timeout: 10000 }, (redirectResponse) => {
+                const redirectStatus = redirectResponse.statusCode;
+                const contentType =
+                  redirectResponse.headers["content-type"] || "";
+                // Check if it's actually a file (zip/tar.gz) and not HTML
+                const isFile =
+                  contentType.includes("application/zip") ||
+                  contentType.includes("application/gzip") ||
+                  contentType.includes("application/x-gzip") ||
+                  contentType.includes("application/x-tar") ||
+                  redirectUrl.includes(".zip") ||
+                  redirectUrl.includes(".tar.gz");
                 const isGood =
-                  redirectResponse.statusCode >= 200 &&
-                  redirectResponse.statusCode < 300;
+                  redirectStatus >= 200 && redirectStatus < 300 && isFile;
                 redirectResponse.destroy();
-                resolve(isGood);
+                resolve({
+                  accessible: isGood,
+                  statusCode: redirectStatus,
+                  finalUrl: redirectUrl,
+                  contentType,
+                });
               })
-              .on("error", () => resolve(false))
+              .on("error", (error) => {
+                resolve({
+                  accessible: false,
+                  statusCode,
+                  error: error.message,
+                });
+              })
               .on("timeout", function () {
                 this.destroy();
-                resolve(false);
+                resolve({
+                  accessible: false,
+                  statusCode,
+                  error: "Timeout following redirect",
+                });
               });
           }
-          // Check if status is good (200-299 range)
-          const isGood =
-            response.statusCode >= 200 && response.statusCode < 300;
+
+          // Check if status is good (200-299 range) and it's actually a file
+          const contentType = response.headers["content-type"] || "";
+          const isFile =
+            contentType.includes("application/zip") ||
+            contentType.includes("application/gzip") ||
+            contentType.includes("application/x-gzip") ||
+            contentType.includes("application/x-tar") ||
+            url.includes(".zip") ||
+            url.includes(".tar.gz");
+          const isGood = statusCode >= 200 && statusCode < 300 && isFile;
           response.destroy();
-          resolve(isGood);
+          resolve({ accessible: isGood, statusCode, contentType });
         });
+
         request.on("error", (error) => {
-          resolve(false);
+          resolve({
+            accessible: false,
+            statusCode: null,
+            error: error.message,
+          });
         });
+
         request.on("timeout", () => {
           request.destroy();
-          resolve(false);
+          resolve({
+            accessible: false,
+            statusCode: null,
+            error: "Request timeout",
+          });
         });
       });
 
-      if (isAccessible) {
+      if (result.accessible) {
         if (attempt > 0) {
-          console.log(`URL ${url} is now accessible after ${attempt} retries`);
+          console.log(
+            `✓ URL ${url} is now accessible after ${attempt} retries (status: ${result.statusCode})`
+          );
+        } else {
+          console.log(
+            `✓ URL ${url} is accessible (status: ${result.statusCode})`
+          );
         }
-        return true;
+        return result.finalUrl || url; // Return the final URL (after redirects) if available
+      } else {
+        const errorMsg = result.error ? ` - ${result.error}` : "";
+        const statusMsg = result.statusCode
+          ? ` (status: ${result.statusCode})`
+          : "";
+        const contentTypeMsg = result.contentType
+          ? ` [content-type: ${result.contentType}]`
+          : "";
+        console.log(
+          `✗ URL ${url} not accessible${statusMsg}${contentTypeMsg}${errorMsg}`
+        );
       }
     } catch (error) {
-      // Continue to retry
+      console.log(`✗ URL ${url} check failed: ${error.message}`);
     }
 
     if (attempt < maxRetries - 1) {
       const delay = initialDelay * Math.pow(2, attempt);
       console.log(
-        `URL ${url} not accessible yet (attempt ${
-          attempt + 1
-        }/${maxRetries}), retrying in ${delay}ms...`
+        `  Retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`
       );
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
@@ -130,31 +203,59 @@ async function checkUrlAccessible(url, maxRetries = 10, initialDelay = 1000) {
 
 async function downloadFromGitHub(url, outputPath) {
   return new Promise((resolve, reject) => {
-    https
-      .get(url, (response) => {
-        if (response.statusCode === 302 || response.statusCode === 301) {
-          // Follow redirect
-          return downloadFromGitHub(response.headers.location, outputPath)
-            .then(resolve)
-            .catch(reject);
-        }
-        if (response.statusCode !== 200) {
-          reject(
-            new Error(
-              `Failed to download ${url}: ${response.statusCode} ${response.statusMessage}`
-            )
-          );
+    const request = https.get(url, { timeout: 30000 }, (response) => {
+      const statusCode = response.statusCode;
+
+      // Follow redirects (all redirect types)
+      if (
+        statusCode === 301 ||
+        statusCode === 302 ||
+        statusCode === 307 ||
+        statusCode === 308
+      ) {
+        const redirectUrl = response.headers.location;
+        response.destroy();
+        if (!redirectUrl) {
+          reject(new Error(`Redirect without location header for ${url}`));
           return;
         }
-        const fileStream = fs.createWriteStream(outputPath);
-        response.pipe(fileStream);
-        fileStream.on("finish", () => {
-          fileStream.close();
-          resolve();
-        });
-        fileStream.on("error", reject);
-      })
-      .on("error", reject);
+        // Resolve relative redirects
+        const finalRedirectUrl = redirectUrl.startsWith("http")
+          ? redirectUrl
+          : new URL(redirectUrl, url).href;
+        console.log(`  Following redirect: ${finalRedirectUrl}`);
+        return downloadFromGitHub(finalRedirectUrl, outputPath)
+          .then(resolve)
+          .catch(reject);
+      }
+
+      if (statusCode !== 200) {
+        response.destroy();
+        reject(
+          new Error(
+            `Failed to download ${url}: ${statusCode} ${response.statusMessage}`
+          )
+        );
+        return;
+      }
+
+      const fileStream = fs.createWriteStream(outputPath);
+      response.pipe(fileStream);
+      fileStream.on("finish", () => {
+        fileStream.close();
+        resolve();
+      });
+      fileStream.on("error", (error) => {
+        response.destroy();
+        reject(error);
+      });
+    });
+
+    request.on("error", reject);
+    request.on("timeout", () => {
+      request.destroy();
+      reject(new Error(`Request timeout for ${url}`));
+    });
   });
 }
 
@@ -179,12 +280,13 @@ async function main() {
   console.log(`  TAR.GZ: ${githubTarGzUrl}`);
 
   // Wait for archives to be accessible with exponential backoff
-  await checkUrlAccessible(githubZipUrl);
-  await checkUrlAccessible(githubTarGzUrl);
+  // This returns the final URL after following redirects
+  const finalZipUrl = await checkUrlAccessible(githubZipUrl);
+  const finalTarGzUrl = await checkUrlAccessible(githubTarGzUrl);
 
   console.log(`Downloading source archives from GitHub...`);
-  await downloadFromGitHub(githubZipUrl, sourceZipPath);
-  await downloadFromGitHub(githubTarGzUrl, sourceTarGzPath);
+  await downloadFromGitHub(finalZipUrl, sourceZipPath);
+  await downloadFromGitHub(finalTarGzUrl, sourceTarGzPath);
 
   console.log(`Downloaded source archives successfully`);
 
