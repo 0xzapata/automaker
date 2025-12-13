@@ -41,6 +41,8 @@ export function WelcomeView() {
     trashedProjects,
     currentProject,
     upsertAndSetCurrentProject,
+    addProject,
+    setCurrentProject,
     setCurrentView,
     theme: globalTheme,
   } = useAppStore();
