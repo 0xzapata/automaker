@@ -5,12 +5,10 @@
  */
 
 import { Router, type Request, type Response } from "express";
-import type { EventEmitter } from "../lib/events.js";
-import { AutoModeService } from "../services/auto-mode-service.js";
+import type { AutoModeService } from "../services/auto-mode-service.js";
 
-export function createAutoModeRoutes(events: EventEmitter): Router {
+export function createAutoModeRoutes(autoModeService: AutoModeService): Router {
   const router = Router();
-  const autoModeService = new AutoModeService(events);
 
   // Start auto mode loop
   router.post("/start", async (req: Request, res: Response) => {

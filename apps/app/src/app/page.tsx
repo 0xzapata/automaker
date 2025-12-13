@@ -15,7 +15,11 @@ import { RunningAgentsView } from "@/components/views/running-agents-view";
 import { useAppStore } from "@/store/app-store";
 import { useSetupStore } from "@/store/setup-store";
 import { getElectronAPI, isElectron } from "@/lib/electron";
-import { FileBrowserProvider, useFileBrowser, setGlobalFileBrowser } from "@/contexts/file-browser-context";
+import {
+  FileBrowserProvider,
+  useFileBrowser,
+  setGlobalFileBrowser,
+} from "@/contexts/file-browser-context";
 
 function HomeContent() {
   const {
@@ -24,6 +28,8 @@ function HomeContent() {
     setIpcConnected,
     theme,
     currentProject,
+    previewTheme,
+    getEffectiveTheme,
   } = useAppStore();
   const { isFirstRun, setupComplete } = useSetupStore();
   const [isMounted, setIsMounted] = useState(false);
@@ -72,9 +78,9 @@ function HomeContent() {
     };
   }, [handleStreamerPanelShortcut]);
 
-  // Compute the effective theme: project theme takes priority over global theme
-  // This is reactive because it depends on currentProject and theme from the store
-  const effectiveTheme = currentProject?.theme || theme;
+  // Compute the effective theme: previewTheme takes priority, then project theme, then global theme
+  // This is reactive because it depends on previewTheme, currentProject, and theme from the store
+  const effectiveTheme = getEffectiveTheme();
 
   // Prevent hydration issues
   useEffect(() => {
@@ -122,7 +128,7 @@ function HomeContent() {
     testConnection();
   }, [setIpcConnected]);
 
-  // Apply theme class to document (uses effective theme - project-specific or global)
+  // Apply theme class to document (uses effective theme - preview, project-specific, or global)
   useEffect(() => {
     const root = document.documentElement;
     root.classList.remove(
@@ -137,7 +143,8 @@ function HomeContent() {
       "gruvbox",
       "catppuccin",
       "onedark",
-      "synthwave"
+      "synthwave",
+      "red"
     );
 
     if (effectiveTheme === "dark") {
@@ -162,6 +169,8 @@ function HomeContent() {
       root.classList.add("onedark");
     } else if (effectiveTheme === "synthwave") {
       root.classList.add("synthwave");
+    } else if (effectiveTheme === "red") {
+      root.classList.add("red");
     } else if (effectiveTheme === "light") {
       root.classList.add("light");
     } else if (effectiveTheme === "system") {
@@ -173,7 +182,7 @@ function HomeContent() {
         root.classList.add("light");
       }
     }
-  }, [effectiveTheme]);
+  }, [effectiveTheme, previewTheme, currentProject, theme]);
 
   const renderView = () => {
     switch (currentView) {

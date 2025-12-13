@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { getElectronAPI } from "@/lib/electron";
 import { Markdown } from "@/components/ui/markdown";
+import { useFileBrowser } from "@/contexts/file-browser-context";
 
 interface InterviewMessage {
   id: string;
@@ -65,6 +66,7 @@ const INTERVIEW_QUESTIONS = [
 export function InterviewView() {
   const { setCurrentView, addProject, setCurrentProject, setAppSpec } =
     useAppStore();
+  const { openFileBrowser } = useFileBrowser();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<InterviewMessage[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -286,11 +288,13 @@ export function InterviewView() {
   };
 
   const handleSelectDirectory = async () => {
-    const api = getElectronAPI();
-    const result = await api.openDirectory();
+    const selectedPath = await openFileBrowser({
+      title: "Select Base Directory",
+      description: "Choose the parent directory where your new project will be created",
+    });
 
-    if (!result.canceled && result.filePaths[0]) {
-      setProjectPath(result.filePaths[0]);
+    if (selectedPath) {
+      setProjectPath(selectedPath);
     }
   };
 

@@ -3,32 +3,22 @@
  */
 
 import { Router, type Request, type Response } from "express";
-import path from "path";
+import type { AutoModeService } from "../services/auto-mode-service.js";
 
-interface RunningAgent {
-  featureId: string;
-  projectPath: string;
-  projectName: string;
-  isAutoMode: boolean;
-}
-
-// In-memory tracking of running agents (shared with auto-mode service via reference)
-const runningAgentsMap = new Map<string, RunningAgent>();
-let autoLoopRunning = false;
-
-export function createRunningAgentsRoutes(): Router {
+export function createRunningAgentsRoutes(autoModeService: AutoModeService): Router {
   const router = Router();
 
   // Get all running agents
   router.get("/", async (_req: Request, res: Response) => {
     try {
-      const runningAgents = Array.from(runningAgentsMap.values());
+      const runningAgents = autoModeService.getRunningAgents();
+      const status = autoModeService.getStatus();
 
       res.json({
         success: true,
         runningAgents,
         totalCount: runningAgents.length,
-        autoLoopRunning,
+        autoLoopRunning: status.autoLoopRunning,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -37,34 +27,4 @@ export function createRunningAgentsRoutes(): Router {
   });
 
   return router;
-}
-
-// Export functions to update running agents from other services
-export function registerRunningAgent(
-  featureId: string,
-  projectPath: string,
-  isAutoMode: boolean
-): void {
-  runningAgentsMap.set(featureId, {
-    featureId,
-    projectPath,
-    projectName: path.basename(projectPath),
-    isAutoMode,
-  });
-}
-
-export function unregisterRunningAgent(featureId: string): void {
-  runningAgentsMap.delete(featureId);
-}
-
-export function setAutoLoopRunning(running: boolean): void {
-  autoLoopRunning = running;
-}
-
-export function getRunningAgentsCount(): number {
-  return runningAgentsMap.size;
-}
-
-export function isAgentRunning(featureId: string): boolean {
-  return runningAgentsMap.has(featureId);
 }

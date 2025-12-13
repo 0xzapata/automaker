@@ -2,8 +2,9 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { useAppStore, formatShortcut } from "@/store/app-store";
+import { useAppStore, formatShortcut, type ThemeMode } from "@/store/app-store";
 import { CoursePromoBadge } from "@/components/ui/course-promo-badge";
+import { IS_MARKETING } from "@/config/app-config";
 import {
   FolderOpen,
   Plus,
@@ -26,22 +27,11 @@ import {
   UserCircle,
   MoreVertical,
   Palette,
-  Moon,
-  Sun,
-  Terminal,
-  Ghost,
-  Snowflake,
-  Flame,
-  Sparkles as TokyoNightIcon,
-  Eclipse,
-  Trees,
-  Cat,
-  Atom,
-  Radio,
   Monitor,
   Search,
   Bug,
   Activity,
+  Recycle,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -70,7 +60,12 @@ import {
   useKeyboardShortcutsConfig,
   KeyboardShortcut,
 } from "@/hooks/use-keyboard-shortcuts";
-import { getElectronAPI, Project, TrashedProject } from "@/lib/electron";
+import {
+  getElectronAPI,
+  Project,
+  TrashedProject,
+  RunningAgent,
+} from "@/lib/electron";
 import {
   initializeProject,
   hasAppSpec,
@@ -78,8 +73,10 @@ import {
 } from "@/lib/project-init";
 import { toast } from "sonner";
 import { Sparkles, Loader2 } from "lucide-react";
+import { themeOptions } from "@/config/theme-options";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { SpecRegenerationEvent } from "@/types/electron";
+import { DeleteProjectDialog } from "@/components/views/settings-view/components/delete-project-dialog";
 import {
   DndContext,
   DragEndEvent,
@@ -173,21 +170,14 @@ function SortableProjectItem({
   );
 }
 
-// Theme options for project theme selector
+// Theme options for project theme selector - derived from the shared config
 const PROJECT_THEME_OPTIONS = [
   { value: "", label: "Use Global", icon: Monitor },
-  { value: "dark", label: "Dark", icon: Moon },
-  { value: "light", label: "Light", icon: Sun },
-  { value: "retro", label: "Retro", icon: Terminal },
-  { value: "dracula", label: "Dracula", icon: Ghost },
-  { value: "nord", label: "Nord", icon: Snowflake },
-  { value: "monokai", label: "Monokai", icon: Flame },
-  { value: "tokyonight", label: "Tokyo Night", icon: TokyoNightIcon },
-  { value: "solarized", label: "Solarized", icon: Eclipse },
-  { value: "gruvbox", label: "Gruvbox", icon: Trees },
-  { value: "catppuccin", label: "Catppuccin", icon: Cat },
-  { value: "onedark", label: "One Dark", icon: Atom },
-  { value: "synthwave", label: "Synthwave", icon: Radio },
+  ...themeOptions.map((opt) => ({
+    value: opt.value,
+    label: opt.label,
+    icon: opt.Icon,
+  })),
 ] as const;
 
 export function Sidebar() {
@@ -198,7 +188,7 @@ export function Sidebar() {
     currentView,
     sidebarOpen,
     projectHistory,
-    addProject,
+    upsertAndSetCurrentProject,
     setCurrentProject,
     setCurrentView,
     toggleSidebar,
@@ -211,7 +201,9 @@ export function Sidebar() {
     clearProjectHistory,
     setProjectTheme,
     setTheme,
+    setPreviewTheme,
     theme: globalTheme,
+    moveProjectToTrash,
   } = useAppStore();
 
   // Get customizable keyboard shortcuts
@@ -224,6 +216,12 @@ export function Sidebar() {
   const [showTrashDialog, setShowTrashDialog] = useState(false);
   const [activeTrashId, setActiveTrashId] = useState<string | null>(null);
   const [isEmptyingTrash, setIsEmptyingTrash] = useState(false);
+
+  // State for delete project confirmation dialog
+  const [showDeleteProjectDialog, setShowDeleteProjectDialog] = useState(false);
+
+  // State for running agents count
+  const [runningAgentsCount, setRunningAgentsCount] = useState(0);
 
   // State for new project setup dialog
   const [showSetupDialog, setShowSetupDialog] = useState(false);
@@ -334,6 +332,49 @@ export function Sidebar() {
     };
   }, [setCurrentView]);
 
+  // Fetch running agents count function - used for initial load and event-driven updates
+  const fetchRunningAgentsCount = useCallback(async () => {
+    try {
+      const api = getElectronAPI();
+      if (api.runningAgents) {
+        const result = await api.runningAgents.getAll();
+        if (result.success && result.runningAgents) {
+          setRunningAgentsCount(result.runningAgents.length);
+        }
+      }
+    } catch (error) {
+      console.error("[Sidebar] Error fetching running agents count:", error);
+    }
+  }, []);
+
+  // Subscribe to auto-mode events to update running agents count in real-time
+  useEffect(() => {
+    const api = getElectronAPI();
+    if (!api.autoMode) {
+      // If autoMode is not available, still fetch initial count
+      fetchRunningAgentsCount();
+      return;
+    }
+
+    // Initial fetch on mount
+    fetchRunningAgentsCount();
+
+    const unsubscribe = api.autoMode.onEvent((event) => {
+      // When a feature starts, completes, or errors, refresh the count
+      if (
+        event.type === "auto_mode_feature_complete" ||
+        event.type === "auto_mode_error" ||
+        event.type === "auto_mode_feature_start"
+      ) {
+        fetchRunningAgentsCount();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [fetchRunningAgentsCount]);
+
   // Handle creating initial spec for new project
   const handleCreateInitialSpec = useCallback(async () => {
     if (!setupProjectPath || !projectOverview.trim()) return;
@@ -414,38 +455,14 @@ export function Sidebar() {
           return;
         }
 
-        // Check if project already exists (by path) to preserve theme and other settings
-        const existingProject = projects.find((p) => p.path === path);
-
-        let project: Project;
-        if (existingProject) {
-          // Update existing project, preserving theme and other properties
-          project = {
-            ...existingProject,
-            name, // Update name in case it changed
-            lastOpened: new Date().toISOString(),
-          };
-          // Update the project in the store (this will update the existing entry)
-          const updatedProjects = projects.map((p) =>
-            p.id === existingProject.id ? project : p
-          );
-          useAppStore.setState({ projects: updatedProjects });
-        } else {
-          // Create new project - check for trashed project with same path first (preserves theme if deleted/recreated)
-          // Then fall back to current effective theme, then global theme
-          const trashedProject = trashedProjects.find((p) => p.path === path);
-          const effectiveTheme = trashedProject?.theme || currentProject?.theme || globalTheme;
-          project = {
-            id: `project-${Date.now()}`,
-            name,
-            path,
-            lastOpened: new Date().toISOString(),
-            theme: effectiveTheme,
-          };
-          addProject(project);
-        }
-
-        setCurrentProject(project);
+        // Upsert project and set as current (handles both create and update cases)
+        // Theme preservation is handled by the store action
+        const trashedProject = trashedProjects.find((p) => p.path === path);
+        const effectiveTheme =
+          (trashedProject?.theme as ThemeMode | undefined) ||
+          (currentProject?.theme as ThemeMode | undefined) ||
+          globalTheme;
+        const project = upsertAndSetCurrentProject(path, name, effectiveTheme);
 
         // Check if app_spec.txt exists
         const specExists = await hasAppSpec(path);
@@ -479,7 +496,12 @@ export function Sidebar() {
         });
       }
     }
-  }, [projects, trashedProjects, addProject, setCurrentProject, currentProject, globalTheme]);
+  }, [
+    trashedProjects,
+    upsertAndSetCurrentProject,
+    currentProject,
+    globalTheme,
+  ]);
 
   const handleRestoreProject = useCallback(
     (projectId: string) => {
@@ -534,14 +556,14 @@ export function Sidebar() {
     }
 
     const confirmed = window.confirm(
-      "Clear all trashed projects from Automaker? This does not delete folders from disk."
+      "Clear all projects from recycle bin? This does not delete folders from disk."
     );
     if (!confirmed) return;
 
     setIsEmptyingTrash(true);
     try {
       emptyTrash();
-      toast.success("Trash cleared");
+      toast.success("Recycle bin cleared");
       setShowTrashDialog(false);
     } finally {
       setIsEmptyingTrash(false);
@@ -761,7 +783,9 @@ export function Sidebar() {
         <div
           className={cn(
             "h-20 border-b border-sidebar-border shrink-0 titlebar-drag-region",
-            sidebarOpen ? "pt-8 px-3 lg:px-6 flex items-center justify-between" : "pt-2 pb-2 px-3 flex flex-col items-center justify-center gap-2"
+            sidebarOpen
+              ? "pt-8 px-3 lg:px-6 flex items-center justify-between"
+              : "pt-2 pb-2 px-3 flex flex-col items-center justify-center gap-2"
           )}
         >
           <div
@@ -785,14 +809,24 @@ export function Sidebar() {
                 sidebarOpen ? "hidden lg:block" : "hidden"
               )}
             >
-              Auto<span className="text-brand-500">maker</span>
+              {IS_MARKETING ? (
+                <>
+                  https://<span className="text-brand-500">automaker</span>.app
+                </>
+              ) : (
+                <>
+                  Auto<span className="text-brand-500">maker</span>
+                </>
+              )}
             </span>
           </div>
           {/* Bug Report Button */}
           <button
             onClick={() => {
               const api = getElectronAPI();
-              api.openExternalLink("https://github.com/AutoMaker-Org/automaker/issues");
+              api.openExternalLink(
+                "https://github.com/AutoMaker-Org/automaker/issues"
+              );
             }}
             className="titlebar-no-drag p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50 transition-all"
             title="Report Bug / Feature Request"
@@ -830,10 +864,10 @@ export function Sidebar() {
             <button
               onClick={() => setShowTrashDialog(true)}
               className="group flex items-center justify-center px-3 h-[42px] rounded-lg relative overflow-hidden transition-all text-muted-foreground hover:text-primary hover:bg-destructive/10 border border-sidebar-border"
-              title="Trash"
+              title="Recycle Bin"
               data-testid="trash-button"
             >
-              <Trash2 className="size-4 shrink-0" />
+              <Recycle className="size-4 shrink-0" />
               {trashedProjects.length > 0 && (
                 <span className="absolute -top-[2px] -right-[2px] flex items-center justify-center w-5 h-5 text-[10px] font-medium rounded-full text-brand-500">
                   {trashedProjects.length > 9 ? "9+" : trashedProjects.length}
@@ -934,7 +968,14 @@ export function Sidebar() {
 
             {/* Project Options Menu - theme and history */}
             {currentProject && (
-              <DropdownMenu>
+              <DropdownMenu
+                onOpenChange={(open) => {
+                  // Clear preview theme when the menu closes
+                  if (!open) {
+                    setPreviewTheme(null);
+                  }
+                }}
+              >
                 <DropdownMenuTrigger asChild>
                   <button
                     className="hidden lg:flex items-center justify-center w-8 h-[42px] rounded-lg text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50 border border-sidebar-border transition-all titlebar-no-drag"
@@ -957,8 +998,12 @@ export function Sidebar() {
                       )}
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent
-                      className="w-48"
+                      className="w-56"
                       data-testid="project-theme-menu"
+                      onPointerLeave={() => {
+                        // Clear preview theme when leaving the dropdown
+                        setPreviewTheme(null);
+                      }}
                     >
                       <DropdownMenuLabel className="text-xs text-muted-foreground">
                         Select theme for this project
@@ -968,9 +1013,14 @@ export function Sidebar() {
                         value={currentProject.theme || ""}
                         onValueChange={(value) => {
                           if (currentProject) {
+                            // Clear preview theme when a theme is selected
+                            setPreviewTheme(null);
                             // If selecting an actual theme (not "Use Global"), also update global
                             if (value !== "") {
                               setTheme(value as any);
+                            } else {
+                              // Restore to global theme when "Use Global" is selected
+                              setTheme(globalTheme);
                             }
                             setProjectTheme(
                               currentProject.id,
@@ -981,22 +1031,54 @@ export function Sidebar() {
                       >
                         {PROJECT_THEME_OPTIONS.map((option) => {
                           const Icon = option.icon;
+                          const themeValue =
+                            option.value === "" ? globalTheme : option.value;
                           return (
-                            <DropdownMenuRadioItem
+                            <div
                               key={option.value}
-                              value={option.value}
-                              data-testid={`project-theme-${
-                                option.value || "global"
-                              }`}
+                              onPointerEnter={() => {
+                                // Preview the theme on hover
+                                setPreviewTheme(themeValue as any);
+                              }}
+                              onPointerLeave={(e) => {
+                                // Clear preview theme when leaving this item
+                                // Only clear if we're not moving to another theme item
+                                const relatedTarget =
+                                  e.relatedTarget as HTMLElement;
+                                if (
+                                  !relatedTarget ||
+                                  !relatedTarget.closest(
+                                    '[data-testid^="project-theme-"]'
+                                  )
+                                ) {
+                                  setPreviewTheme(null);
+                                }
+                              }}
                             >
-                              <Icon className="w-4 h-4 mr-2" />
-                              <span>{option.label}</span>
-                              {option.value === "" && (
-                                <span className="text-[10px] text-muted-foreground ml-1 capitalize">
-                                  ({globalTheme})
-                                </span>
-                              )}
-                            </DropdownMenuRadioItem>
+                              <DropdownMenuRadioItem
+                                value={option.value}
+                                data-testid={`project-theme-${
+                                  option.value || "global"
+                                }`}
+                                onFocus={() => {
+                                  // Preview the theme on keyboard navigation
+                                  setPreviewTheme(themeValue as any);
+                                }}
+                                onBlur={() => {
+                                  // Clear preview theme when losing focus
+                                  // If moving to another item, its onFocus will set it again
+                                  setPreviewTheme(null);
+                                }}
+                              >
+                                <Icon className="w-4 h-4 mr-2" />
+                                <span>{option.label}</span>
+                                {option.value === "" && (
+                                  <span className="text-[10px] text-muted-foreground ml-1 capitalize">
+                                    ({globalTheme})
+                                  </span>
+                                )}
+                              </DropdownMenuRadioItem>
+                            </div>
                           );
                         })}
                       </DropdownMenuRadioGroup>
@@ -1039,6 +1121,17 @@ export function Sidebar() {
                       </DropdownMenuItem>
                     </>
                   )}
+
+                  {/* Move to Trash Section */}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setShowDeleteProjectDialog(true)}
+                    className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                    data-testid="move-project-to-trash"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    <span>Move to Trash</span>
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -1163,14 +1256,25 @@ export function Sidebar() {
             {isActiveRoute("running-agents") && (
               <div className="absolute inset-y-0 left-0 w-0.5 bg-brand-500 rounded-l-md"></div>
             )}
-            <Activity
-              className={cn(
-                "w-4 h-4 shrink-0 transition-colors",
-                isActiveRoute("running-agents")
-                  ? "text-brand-500"
-                  : "group-hover:text-brand-400"
+            <div className="relative">
+              <Activity
+                className={cn(
+                  "w-4 h-4 shrink-0 transition-colors",
+                  isActiveRoute("running-agents")
+                    ? "text-brand-500"
+                    : "group-hover:text-brand-400"
+                )}
+              />
+              {/* Running agents count badge - shown in collapsed state */}
+              {!sidebarOpen && runningAgentsCount > 0 && (
+                <span
+                  className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-5 h-5 px-1 text-[10px] font-semibold rounded-full bg-brand-500 text-white"
+                  data-testid="running-agents-count-collapsed"
+                >
+                  {runningAgentsCount > 99 ? "99" : runningAgentsCount}
+                </span>
               )}
-            />
+            </div>
             <span
               className={cn(
                 "ml-2.5 font-medium text-sm flex-1 text-left",
@@ -1179,6 +1283,18 @@ export function Sidebar() {
             >
               Running Agents
             </span>
+            {/* Running agents count badge - shown in expanded state */}
+            {sidebarOpen && runningAgentsCount > 0 && (
+              <span
+                className={cn(
+                  "hidden lg:flex items-center justify-center min-w-6 h-6 px-1.5 text-xs font-semibold rounded-full bg-brand-500 text-white",
+                  isActiveRoute("running-agents") && "bg-brand-600"
+                )}
+                data-testid="running-agents-count"
+              >
+                {runningAgentsCount > 99 ? "99" : runningAgentsCount}
+              </span>
+            )}
             {!sidebarOpen && (
               <span className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 border border-border">
                 Running Agents
@@ -1242,7 +1358,7 @@ export function Sidebar() {
       <Dialog open={showTrashDialog} onOpenChange={setShowTrashDialog}>
         <DialogContent className="bg-popover border-border max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Trash</DialogTitle>
+            <DialogTitle>Recycle Bin</DialogTitle>
             <DialogDescription className="text-muted-foreground">
               Restore projects to the sidebar or delete their folders using your
               system Trash.
@@ -1250,7 +1366,9 @@ export function Sidebar() {
           </DialogHeader>
 
           {trashedProjects.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Trash is empty.</p>
+            <p className="text-sm text-muted-foreground">
+              Recycle bin is empty.
+            </p>
           ) : (
             <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
               {trashedProjects.map((project) => (
@@ -1318,7 +1436,7 @@ export function Sidebar() {
                 disabled={isEmptyingTrash}
                 data-testid="empty-trash"
               >
-                {isEmptyingTrash ? "Clearing..." : "Empty Trash"}
+                {isEmptyingTrash ? "Clearing..." : "Empty Recycle Bin"}
               </Button>
             )}
           </DialogFooter>
@@ -1421,6 +1539,14 @@ export function Sidebar() {
             </button>
           </div>
         )}
+
+      {/* Delete Project Confirmation Dialog */}
+      <DeleteProjectDialog
+        open={showDeleteProjectDialog}
+        onOpenChange={setShowDeleteProjectDialog}
+        project={currentProject}
+        onConfirm={moveProjectToTrash}
+      />
     </aside>
   );
 }

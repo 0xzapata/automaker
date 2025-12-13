@@ -33,7 +33,6 @@ import type {
 } from "@/types/electron";
 import { getGlobalFileBrowser } from "@/contexts/file-browser-context";
 
-
 // Server URL - configurable via environment variable
 const getServerUrl = (): string => {
   if (typeof window !== "undefined") {
@@ -42,7 +41,6 @@ const getServerUrl = (): string => {
   }
   return "http://localhost:3008";
 };
-
 
 // Get API key from environment variable
 const getApiKey = (): string | null => {
@@ -76,7 +74,10 @@ export class HttpApiClient implements ElectronAPI {
   }
 
   private connectWebSocket(): void {
-    if (this.isConnecting || (this.ws && this.ws.readyState === WebSocket.OPEN)) {
+    if (
+      this.isConnecting ||
+      (this.ws && this.ws.readyState === WebSocket.OPEN)
+    ) {
       return;
     }
 
@@ -103,7 +104,10 @@ export class HttpApiClient implements ElectronAPI {
             callbacks.forEach((cb) => cb(data.payload));
           }
         } catch (error) {
-          console.error("[HttpApiClient] Failed to parse WebSocket message:", error);
+          console.error(
+            "[HttpApiClient] Failed to parse WebSocket message:",
+            error
+          );
         }
       };
 
@@ -130,7 +134,10 @@ export class HttpApiClient implements ElectronAPI {
     }
   }
 
-  private subscribeToEvent(type: EventType, callback: EventCallback): () => void {
+  private subscribeToEvent(
+    type: EventType,
+    callback: EventCallback
+  ): () => void {
     if (!this.eventCallbacks.has(type)) {
       this.eventCallbacks.set(type, new Set());
     }
@@ -196,7 +203,9 @@ export class HttpApiClient implements ElectronAPI {
     return result.status === "ok" ? "pong" : "error";
   }
 
-  async openExternalLink(url: string): Promise<{ success: boolean; error?: string }> {
+  async openExternalLink(
+    url: string
+  ): Promise<{ success: boolean; error?: string }> {
     // Open in new tab
     window.open(url, "_blank", "noopener,noreferrer");
     return { success: true };
@@ -301,7 +310,9 @@ export class HttpApiClient implements ElectronAPI {
   async getPath(name: string): Promise<string> {
     // Server provides data directory
     if (name === "userData") {
-      const result = await this.get<{ dataDir: string }>("/api/health/detailed");
+      const result = await this.get<{ dataDir: string }>(
+        "/api/health/detailed"
+      );
       return result.dataDir || "/data";
     }
     return `/data/${name}`;
@@ -313,7 +324,32 @@ export class HttpApiClient implements ElectronAPI {
     mimeType: string,
     projectPath?: string
   ): Promise<SaveImageResult> {
-    return this.post("/api/fs/save-image", { data, filename, mimeType, projectPath });
+    return this.post("/api/fs/save-image", {
+      data,
+      filename,
+      mimeType,
+      projectPath,
+    });
+  }
+
+  async saveBoardBackground(
+    data: string,
+    filename: string,
+    mimeType: string,
+    projectPath: string
+  ): Promise<{ success: boolean; path?: string; error?: string }> {
+    return this.post("/api/fs/save-board-background", {
+      data,
+      filename,
+      mimeType,
+      projectPath,
+    });
+  }
+
+  async deleteBoardBackground(
+    projectPath: string
+  ): Promise<{ success: boolean; error?: string }> {
+    return this.post("/api/fs/delete-board-background", { projectPath });
   }
 
   // CLI checks - server-side
@@ -444,14 +480,19 @@ export class HttpApiClient implements ElectronAPI {
       output?: string;
     }> => this.post("/api/setup/auth-claude"),
 
-    authCodex: (apiKey?: string): Promise<{
+    authCodex: (
+      apiKey?: string
+    ): Promise<{
       success: boolean;
       requiresManualAuth?: boolean;
       command?: string;
       error?: string;
     }> => this.post("/api/setup/auth-codex", { apiKey }),
 
-    storeApiKey: (provider: string, apiKey: string): Promise<{
+    storeApiKey: (
+      provider: string,
+      apiKey: string
+    ): Promise<{
       success: boolean;
       error?: string;
     }> => this.post("/api/setup/store-api-key", { provider, apiKey }),
@@ -463,7 +504,9 @@ export class HttpApiClient implements ElectronAPI {
       hasGoogleKey: boolean;
     }> => this.get("/api/setup/api-keys"),
 
-    configureCodexMcp: (projectPath: string): Promise<{
+    configureCodexMcp: (
+      projectPath: string
+    ): Promise<{
       success: boolean;
       configPath?: string;
       error?: string;
@@ -496,8 +539,11 @@ export class HttpApiClient implements ElectronAPI {
       this.post("/api/features/get", { projectPath, featureId }),
     create: (projectPath: string, feature: Feature) =>
       this.post("/api/features/create", { projectPath, feature }),
-    update: (projectPath: string, featureId: string, updates: Partial<Feature>) =>
-      this.post("/api/features/update", { projectPath, featureId, updates }),
+    update: (
+      projectPath: string,
+      featureId: string,
+      updates: Partial<Feature>
+    ) => this.post("/api/features/update", { projectPath, featureId, updates }),
     delete: (projectPath: string, featureId: string) =>
       this.post("/api/features/delete", { projectPath, featureId }),
     getAgentOutput: (projectPath: string, featureId: string) =>
@@ -514,8 +560,16 @@ export class HttpApiClient implements ElectronAPI {
       this.post("/api/auto-mode/stop-feature", { featureId }),
     status: (projectPath?: string) =>
       this.post("/api/auto-mode/status", { projectPath }),
-    runFeature: (projectPath: string, featureId: string, useWorktrees?: boolean) =>
-      this.post("/api/auto-mode/run-feature", { projectPath, featureId, useWorktrees }),
+    runFeature: (
+      projectPath: string,
+      featureId: string,
+      useWorktrees?: boolean
+    ) =>
+      this.post("/api/auto-mode/run-feature", {
+        projectPath,
+        featureId,
+        useWorktrees,
+      }),
     verifyFeature: (projectPath: string, featureId: string) =>
       this.post("/api/auto-mode/verify-feature", { projectPath, featureId }),
     resumeFeature: (projectPath: string, featureId: string) =>
@@ -539,7 +593,10 @@ export class HttpApiClient implements ElectronAPI {
     commitFeature: (projectPath: string, featureId: string) =>
       this.post("/api/auto-mode/commit-feature", { projectPath, featureId }),
     onEvent: (callback: (event: AutoModeEvent) => void) => {
-      return this.subscribeToEvent("auto-mode:event", callback as EventCallback);
+      return this.subscribeToEvent(
+        "auto-mode:event",
+        callback as EventCallback
+      );
     },
   };
 
@@ -558,7 +615,11 @@ export class HttpApiClient implements ElectronAPI {
     getDiffs: (projectPath: string, featureId: string) =>
       this.post("/api/worktree/diffs", { projectPath, featureId }),
     getFileDiff: (projectPath: string, featureId: string, filePath: string) =>
-      this.post("/api/worktree/file-diff", { projectPath, featureId, filePath }),
+      this.post("/api/worktree/file-diff", {
+        projectPath,
+        featureId,
+        filePath,
+      }),
   };
 
   // Git API
@@ -576,20 +637,30 @@ export class HttpApiClient implements ElectronAPI {
     stop: () => this.post("/api/suggestions/stop"),
     status: () => this.get("/api/suggestions/status"),
     onEvent: (callback: (event: SuggestionsEvent) => void) => {
-      return this.subscribeToEvent("suggestions:event", callback as EventCallback);
+      return this.subscribeToEvent(
+        "suggestions:event",
+        callback as EventCallback
+      );
     },
   };
 
   // Spec Regeneration API
   specRegeneration: SpecRegenerationAPI = {
-    create: (projectPath: string, projectOverview: string, generateFeatures?: boolean) =>
+    create: (
+      projectPath: string,
+      projectOverview: string,
+      generateFeatures?: boolean
+    ) =>
       this.post("/api/spec-regeneration/create", {
         projectPath,
         projectOverview,
         generateFeatures,
       }),
     generate: (projectPath: string, projectDefinition: string) =>
-      this.post("/api/spec-regeneration/generate", { projectPath, projectDefinition }),
+      this.post("/api/spec-regeneration/generate", {
+        projectPath,
+        projectDefinition,
+      }),
     generateFeatures: (projectPath: string) =>
       this.post("/api/spec-regeneration/generate-features", { projectPath }),
     stop: () => this.post("/api/spec-regeneration/stop"),
@@ -636,7 +707,10 @@ export class HttpApiClient implements ElectronAPI {
 
   // Agent API
   agent = {
-    start: (sessionId: string, workingDirectory?: string): Promise<{
+    start: (
+      sessionId: string,
+      workingDirectory?: string
+    ): Promise<{
       success: boolean;
       messages?: Message[];
       error?: string;
@@ -648,9 +722,16 @@ export class HttpApiClient implements ElectronAPI {
       workingDirectory?: string,
       imagePaths?: string[]
     ): Promise<{ success: boolean; error?: string }> =>
-      this.post("/api/agent/send", { sessionId, message, workingDirectory, imagePaths }),
+      this.post("/api/agent/send", {
+        sessionId,
+        message,
+        workingDirectory,
+        imagePaths,
+      }),
 
-    getHistory: (sessionId: string): Promise<{
+    getHistory: (
+      sessionId: string
+    ): Promise<{
       success: boolean;
       messages?: Message[];
       isRunning?: boolean;
@@ -668,9 +749,26 @@ export class HttpApiClient implements ElectronAPI {
     },
   };
 
+  // Templates API
+  templates = {
+    clone: (
+      repoUrl: string,
+      projectName: string,
+      parentDir: string
+    ): Promise<{
+      success: boolean;
+      projectPath?: string;
+      projectName?: string;
+      error?: string;
+    }> =>
+      this.post("/api/templates/clone", { repoUrl, projectName, parentDir }),
+  };
+
   // Sessions API
   sessions = {
-    list: (includeArchived?: boolean): Promise<{
+    list: (
+      includeArchived?: boolean
+    ): Promise<{
       success: boolean;
       sessions?: SessionListItem[];
       error?: string;
@@ -700,13 +798,19 @@ export class HttpApiClient implements ElectronAPI {
     ): Promise<{ success: boolean; error?: string }> =>
       this.put(`/api/sessions/${sessionId}`, { name, tags }),
 
-    archive: (sessionId: string): Promise<{ success: boolean; error?: string }> =>
+    archive: (
+      sessionId: string
+    ): Promise<{ success: boolean; error?: string }> =>
       this.post(`/api/sessions/${sessionId}/archive`, {}),
 
-    unarchive: (sessionId: string): Promise<{ success: boolean; error?: string }> =>
+    unarchive: (
+      sessionId: string
+    ): Promise<{ success: boolean; error?: string }> =>
       this.post(`/api/sessions/${sessionId}/unarchive`, {}),
 
-    delete: (sessionId: string): Promise<{ success: boolean; error?: string }> =>
+    delete: (
+      sessionId: string
+    ): Promise<{ success: boolean; error?: string }> =>
       this.httpDelete(`/api/sessions/${sessionId}`),
   };
 }

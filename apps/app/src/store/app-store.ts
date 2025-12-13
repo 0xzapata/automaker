@@ -27,7 +27,8 @@ export type ThemeMode =
   | "gruvbox"
   | "catppuccin"
   | "onedark"
-  | "synthwave";
+  | "synthwave"
+  | "red";
 
 export type KanbanCardDetailLevel = "minimal" | "standard" | "detailed";
 
@@ -39,23 +40,39 @@ export interface ApiKeys {
 
 // Keyboard Shortcut with optional modifiers
 export interface ShortcutKey {
-  key: string;           // The main key (e.g., "K", "N", "1")
-  shift?: boolean;       // Shift key modifier
-  cmdCtrl?: boolean;     // Cmd on Mac, Ctrl on Windows/Linux
-  alt?: boolean;         // Alt/Option key modifier
+  key: string; // The main key (e.g., "K", "N", "1")
+  shift?: boolean; // Shift key modifier
+  cmdCtrl?: boolean; // Cmd on Mac, Ctrl on Windows/Linux
+  alt?: boolean; // Alt/Option key modifier
 }
 
 // Helper to parse shortcut string to ShortcutKey object
 export function parseShortcut(shortcut: string): ShortcutKey {
-  const parts = shortcut.split("+").map(p => p.trim());
+  const parts = shortcut.split("+").map((p) => p.trim());
   const result: ShortcutKey = { key: parts[parts.length - 1] };
 
   // Normalize common OS-specific modifiers (Cmd/Ctrl/Win/Super symbols) into cmdCtrl
   for (let i = 0; i < parts.length - 1; i++) {
     const modifier = parts[i].toLowerCase();
     if (modifier === "shift") result.shift = true;
-    else if (modifier === "cmd" || modifier === "ctrl" || modifier === "win" || modifier === "super" || modifier === "⌘" || modifier === "^" || modifier === "⊞" || modifier === "◆") result.cmdCtrl = true;
-    else if (modifier === "alt" || modifier === "opt" || modifier === "option" || modifier === "⌥") result.alt = true;
+    else if (
+      modifier === "cmd" ||
+      modifier === "ctrl" ||
+      modifier === "win" ||
+      modifier === "super" ||
+      modifier === "⌘" ||
+      modifier === "^" ||
+      modifier === "⊞" ||
+      modifier === "◆"
+    )
+      result.cmdCtrl = true;
+    else if (
+      modifier === "alt" ||
+      modifier === "opt" ||
+      modifier === "option" ||
+      modifier === "⌥"
+    )
+      result.alt = true;
   }
 
   return result;
@@ -67,36 +84,49 @@ export function formatShortcut(shortcut: string, forDisplay = false): string {
   const parts: string[] = [];
 
   // Prefer User-Agent Client Hints when available; fall back to legacy
-  const platform: 'darwin' | 'win32' | 'linux' = (() => {
-    if (typeof navigator === 'undefined') return 'linux';
+  const platform: "darwin" | "win32" | "linux" = (() => {
+    if (typeof navigator === "undefined") return "linux";
 
-    const uaPlatform = (navigator as Navigator & { userAgentData?: { platform?: string } })
-      .userAgentData?.platform?.toLowerCase?.();
+    const uaPlatform = (
+      navigator as Navigator & { userAgentData?: { platform?: string } }
+    ).userAgentData?.platform?.toLowerCase?.();
     const legacyPlatform = navigator.platform?.toLowerCase?.();
-    const platformString = uaPlatform || legacyPlatform || '';
+    const platformString = uaPlatform || legacyPlatform || "";
 
-    if (platformString.includes('mac')) return 'darwin';
-    if (platformString.includes('win')) return 'win32';
-    return 'linux';
+    if (platformString.includes("mac")) return "darwin";
+    if (platformString.includes("win")) return "win32";
+    return "linux";
   })();
 
   // Primary modifier - OS-specific
   if (parsed.cmdCtrl) {
     if (forDisplay) {
-      parts.push(platform === 'darwin' ? '⌘' : platform === 'win32' ? '⊞' : '◆');
+      parts.push(
+        platform === "darwin" ? "⌘" : platform === "win32" ? "⊞" : "◆"
+      );
     } else {
-      parts.push(platform === 'darwin' ? 'Cmd' : platform === 'win32' ? 'Win' : 'Super');
+      parts.push(
+        platform === "darwin" ? "Cmd" : platform === "win32" ? "Win" : "Super"
+      );
     }
   }
 
   // Alt/Option
   if (parsed.alt) {
-    parts.push(forDisplay ? (platform === 'darwin' ? '⌥' : 'Alt') : (platform === 'darwin' ? 'Opt' : 'Alt'));
+    parts.push(
+      forDisplay
+        ? platform === "darwin"
+          ? "⌥"
+          : "Alt"
+        : platform === "darwin"
+        ? "Opt"
+        : "Alt"
+    );
   }
 
   // Shift
   if (parsed.shift) {
-    parts.push(forDisplay ? '⇧' : 'Shift');
+    parts.push(forDisplay ? "⇧" : "Shift");
   }
 
   parts.push(parsed.key.toUpperCase());
@@ -139,22 +169,22 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
   context: "C",
   settings: "S",
   profiles: "M",
-  
+
   // UI
   toggleSidebar: "`",
-  
+
   // Actions
   // Note: Some shortcuts share the same key (e.g., "N" for addFeature, newSession, addProfile)
   // This is intentional as they are context-specific and only active in their respective views
-  addFeature: "N",        // Only active in board view
-  addContextFile: "N",    // Only active in context view
-  startNext: "G",         // Only active in board view
-  newSession: "N",        // Only active in agent view
-  openProject: "O",       // Global shortcut
-  projectPicker: "P",     // Global shortcut
-  cyclePrevProject: "Q",  // Global shortcut
-  cycleNextProject: "E",  // Global shortcut
-  addProfile: "N",        // Only active in profiles view
+  addFeature: "N", // Only active in board view
+  addContextFile: "N", // Only active in context view
+  startNext: "G", // Only active in board view
+  newSession: "N", // Only active in agent view
+  openProject: "O", // Global shortcut
+  projectPicker: "P", // Global shortcut
+  cyclePrevProject: "Q", // Global shortcut
+  cycleNextProject: "E", // Global shortcut
+  addProfile: "N", // Only active in profiles view
 };
 
 export interface ImageAttachment {
@@ -245,6 +275,7 @@ export interface Feature {
   // Worktree info - set when a feature is being worked on in an isolated git worktree
   worktreePath?: string; // Path to the worktree directory
   branchName?: string; // Name of the feature branch
+  justFinishedAt?: string; // ISO timestamp when agent just finished and moved to waiting_approval (shows badge for 2 minutes)
 }
 
 // File tree node for project analysis
@@ -301,10 +332,13 @@ export interface AppState {
   chatHistoryOpen: boolean;
 
   // Auto Mode (per-project state, keyed by project ID)
-  autoModeByProject: Record<string, {
-    isRunning: boolean;
-    runningTasks: string[]; // Feature IDs being worked on
-  }>;
+  autoModeByProject: Record<
+    string,
+    {
+      isRunning: boolean;
+      runningTasks: string[]; // Feature IDs being worked on
+    }
+  >;
   autoModeActivityLog: AutoModeActivity[];
   maxConcurrency: number; // Maximum number of concurrent agent tasks
 
@@ -332,7 +366,48 @@ export interface AppState {
   // Project Analysis
   projectAnalysis: ProjectAnalysis | null;
   isAnalyzing: boolean;
+
+  // Board Background Settings (per-project, keyed by project path)
+  boardBackgroundByProject: Record<
+    string,
+    {
+      imagePath: string | null; // Path to background image in .automaker directory
+      imageVersion?: number; // Timestamp to bust browser cache when image is updated
+      cardOpacity: number; // Opacity of cards (0-100)
+      columnOpacity: number; // Opacity of columns (0-100)
+      columnBorderEnabled: boolean; // Whether to show column borders
+      cardGlassmorphism: boolean; // Whether to use glassmorphism (backdrop-blur) on cards
+      cardBorderEnabled: boolean; // Whether to show card borders
+      cardBorderOpacity: number; // Opacity of card borders (0-100)
+      hideScrollbar: boolean; // Whether to hide the board scrollbar
+    }
+  >;
+
+  // Theme Preview (for hover preview in theme selectors)
+  previewTheme: ThemeMode | null;
 }
+
+// Default background settings for board backgrounds
+export const defaultBackgroundSettings: {
+  imagePath: string | null;
+  imageVersion?: number;
+  cardOpacity: number;
+  columnOpacity: number;
+  columnBorderEnabled: boolean;
+  cardGlassmorphism: boolean;
+  cardBorderEnabled: boolean;
+  cardBorderOpacity: number;
+  hideScrollbar: boolean;
+} = {
+  imagePath: null,
+  cardOpacity: 100,
+  columnOpacity: 100,
+  columnBorderEnabled: true,
+  cardGlassmorphism: true,
+  cardBorderEnabled: true,
+  cardBorderOpacity: 100,
+  hideScrollbar: false,
+};
 
 export interface AutoModeActivity {
   id: string;
@@ -364,6 +439,11 @@ export interface AppActions {
   deleteTrashedProject: (projectId: string) => void;
   emptyTrash: () => void;
   setCurrentProject: (project: Project | null) => void;
+  upsertAndSetCurrentProject: (
+    path: string,
+    name: string,
+    theme?: ThemeMode
+  ) => Project; // Upsert project by path and set as current
   reorderProjects: (oldIndex: number, newIndex: number) => void;
   cyclePrevProject: () => void; // Cycle back through project history (Q)
   cycleNextProject: () => void; // Cycle forward through project history (E)
@@ -377,7 +457,8 @@ export interface AppActions {
   // Theme actions
   setTheme: (theme: ThemeMode) => void;
   setProjectTheme: (projectId: string, theme: ThemeMode | null) => void; // Set per-project theme (null to clear)
-  getEffectiveTheme: () => ThemeMode; // Get the effective theme (project or global)
+  getEffectiveTheme: () => ThemeMode; // Get the effective theme (project, global, or preview if set)
+  setPreviewTheme: (theme: ThemeMode | null) => void; // Set preview theme for hover preview (null to clear)
 
   // Feature actions
   setFeatures: (features: Feature[]) => void;
@@ -413,7 +494,10 @@ export interface AppActions {
   addRunningTask: (projectId: string, taskId: string) => void;
   removeRunningTask: (projectId: string, taskId: string) => void;
   clearRunningTasks: (projectId: string) => void;
-  getAutoModeState: (projectId: string) => { isRunning: boolean; runningTasks: string[] };
+  getAutoModeState: (projectId: string) => {
+    isRunning: boolean;
+    runningTasks: string[];
+  };
   addAutoModeActivity: (
     activity: Omit<AutoModeActivity, "id" | "timestamp">
   ) => void;
@@ -452,8 +536,32 @@ export interface AppActions {
   clearAnalysis: () => void;
 
   // Agent Session actions
-  setLastSelectedSession: (projectPath: string, sessionId: string | null) => void;
+  setLastSelectedSession: (
+    projectPath: string,
+    sessionId: string | null
+  ) => void;
   getLastSelectedSession: (projectPath: string) => string | null;
+
+  // Board Background actions
+  setBoardBackground: (projectPath: string, imagePath: string | null) => void;
+  setCardOpacity: (projectPath: string, opacity: number) => void;
+  setColumnOpacity: (projectPath: string, opacity: number) => void;
+  setColumnBorderEnabled: (projectPath: string, enabled: boolean) => void;
+  getBoardBackground: (projectPath: string) => {
+    imagePath: string | null;
+    cardOpacity: number;
+    columnOpacity: number;
+    columnBorderEnabled: boolean;
+    cardGlassmorphism: boolean;
+    cardBorderEnabled: boolean;
+    cardBorderOpacity: number;
+    hideScrollbar: boolean;
+  };
+  setCardGlassmorphism: (projectPath: string, enabled: boolean) => void;
+  setCardBorderEnabled: (projectPath: string, enabled: boolean) => void;
+  setCardBorderOpacity: (projectPath: string, opacity: number) => void;
+  setHideScrollbar: (projectPath: string, hide: boolean) => void;
+  clearBoardBackground: (projectPath: string) => void;
 
   // Reset
   reset: () => void;
@@ -464,7 +572,8 @@ const DEFAULT_AI_PROFILES: AIProfile[] = [
   {
     id: "profile-heavy-task",
     name: "Heavy Task",
-    description: "Claude Opus with Ultrathink for complex architecture, migrations, or deep debugging.",
+    description:
+      "Claude Opus with Ultrathink for complex architecture, migrations, or deep debugging.",
     model: "opus",
     thinkingLevel: "ultrathink",
     provider: "claude",
@@ -474,7 +583,8 @@ const DEFAULT_AI_PROFILES: AIProfile[] = [
   {
     id: "profile-balanced",
     name: "Balanced",
-    description: "Claude Sonnet with medium thinking for typical development tasks.",
+    description:
+      "Claude Sonnet with medium thinking for typical development tasks.",
     model: "sonnet",
     thinkingLevel: "medium",
     provider: "claude",
@@ -546,6 +656,8 @@ const initialState: AppState = {
   aiProfiles: DEFAULT_AI_PROFILES,
   projectAnalysis: null,
   isAnalyzing: false,
+  boardBackgroundByProject: {},
+  previewTheme: null,
 };
 
 export const useAppStore = create<AppState & AppActions>()(
@@ -671,7 +783,9 @@ export const useAppStore = create<AppState & AppActions>()(
           // Add to project history (MRU order)
           const currentHistory = get().projectHistory;
           // Remove this project if it's already in history
-          const filteredHistory = currentHistory.filter((id) => id !== project.id);
+          const filteredHistory = currentHistory.filter(
+            (id) => id !== project.id
+          );
           // Add to the front (most recent)
           const newHistory = [project.id, ...filteredHistory];
           // Reset history index to 0 (current project)
@@ -679,6 +793,58 @@ export const useAppStore = create<AppState & AppActions>()(
         } else {
           set({ currentView: "welcome" });
         }
+      },
+
+      upsertAndSetCurrentProject: (path, name, theme) => {
+        const {
+          projects,
+          trashedProjects,
+          currentProject,
+          theme: globalTheme,
+        } = get();
+        const existingProject = projects.find((p) => p.path === path);
+        let project: Project;
+
+        if (existingProject) {
+          // Update existing project, preserving theme and other properties
+          project = {
+            ...existingProject,
+            name, // Update name in case it changed
+            lastOpened: new Date().toISOString(),
+          };
+          // Update the project in the store
+          const updatedProjects = projects.map((p) =>
+            p.id === existingProject.id ? project : p
+          );
+          set({ projects: updatedProjects });
+        } else {
+          // Create new project - check for trashed project with same path first (preserves theme if deleted/recreated)
+          // Then fall back to provided theme, then current project theme, then global theme
+          const trashedProject = trashedProjects.find((p) => p.path === path);
+          const effectiveTheme =
+            theme ||
+            trashedProject?.theme ||
+            currentProject?.theme ||
+            globalTheme;
+          project = {
+            id: `project-${Date.now()}`,
+            name,
+            path,
+            lastOpened: new Date().toISOString(),
+            theme: effectiveTheme,
+          };
+          // Add the new project to the store
+          set({
+            projects: [
+              ...projects,
+              { ...project, lastOpened: new Date().toISOString() },
+            ],
+          });
+        }
+
+        // Set as current project (this will also update history and view)
+        get().setCurrentProject(project);
+        return project;
       },
 
       cyclePrevProject: () => {
@@ -711,7 +877,7 @@ export const useAppStore = create<AppState & AppActions>()(
             currentProject: targetProject,
             projectHistory: validHistory,
             projectHistoryIndex: newIndex,
-            currentView: "board"
+            currentView: "board",
           });
         }
       },
@@ -736,9 +902,8 @@ export const useAppStore = create<AppState & AppActions>()(
         if (currentIndex === -1) currentIndex = 0;
 
         // Move to the previous index (going forward = lower index), wrapping around
-        const newIndex = currentIndex <= 0
-          ? validHistory.length - 1
-          : currentIndex - 1;
+        const newIndex =
+          currentIndex <= 0 ? validHistory.length - 1 : currentIndex - 1;
         const targetProjectId = validHistory[newIndex];
         const targetProject = projects.find((p) => p.id === targetProjectId);
 
@@ -748,7 +913,7 @@ export const useAppStore = create<AppState & AppActions>()(
             currentProject: targetProject,
             projectHistory: validHistory,
             projectHistoryIndex: newIndex,
-            currentView: "board"
+            currentView: "board",
           });
         }
       },
@@ -800,6 +965,11 @@ export const useAppStore = create<AppState & AppActions>()(
       },
 
       getEffectiveTheme: () => {
+        // If preview theme is set, use it (for hover preview)
+        const previewTheme = get().previewTheme;
+        if (previewTheme) {
+          return previewTheme;
+        }
         const currentProject = get().currentProject;
         // If current project has a theme set, use it
         if (currentProject?.theme) {
@@ -808,6 +978,8 @@ export const useAppStore = create<AppState & AppActions>()(
         // Otherwise fall back to global theme
         return get().theme;
       },
+
+      setPreviewTheme: (theme) => set({ previewTheme: theme }),
 
       // Feature actions
       setFeatures: (features) => set({ features }),
@@ -960,7 +1132,10 @@ export const useAppStore = create<AppState & AppActions>()(
       // Auto Mode actions (per-project)
       setAutoModeRunning: (projectId, running) => {
         const current = get().autoModeByProject;
-        const projectState = current[projectId] || { isRunning: false, runningTasks: [] };
+        const projectState = current[projectId] || {
+          isRunning: false,
+          runningTasks: [],
+        };
         set({
           autoModeByProject: {
             ...current,
@@ -971,7 +1146,10 @@ export const useAppStore = create<AppState & AppActions>()(
 
       addRunningTask: (projectId, taskId) => {
         const current = get().autoModeByProject;
-        const projectState = current[projectId] || { isRunning: false, runningTasks: [] };
+        const projectState = current[projectId] || {
+          isRunning: false,
+          runningTasks: [],
+        };
         if (!projectState.runningTasks.includes(taskId)) {
           set({
             autoModeByProject: {
@@ -987,13 +1165,18 @@ export const useAppStore = create<AppState & AppActions>()(
 
       removeRunningTask: (projectId, taskId) => {
         const current = get().autoModeByProject;
-        const projectState = current[projectId] || { isRunning: false, runningTasks: [] };
+        const projectState = current[projectId] || {
+          isRunning: false,
+          runningTasks: [],
+        };
         set({
           autoModeByProject: {
             ...current,
             [projectId]: {
               ...projectState,
-              runningTasks: projectState.runningTasks.filter((id) => id !== taskId),
+              runningTasks: projectState.runningTasks.filter(
+                (id) => id !== taskId
+              ),
             },
           },
         });
@@ -1001,7 +1184,10 @@ export const useAppStore = create<AppState & AppActions>()(
 
       clearRunningTasks: (projectId) => {
         const current = get().autoModeByProject;
-        const projectState = current[projectId] || { isRunning: false, runningTasks: [] };
+        const projectState = current[projectId] || {
+          isRunning: false,
+          runningTasks: [],
+        };
         set({
           autoModeByProject: {
             ...current,
@@ -1116,7 +1302,9 @@ export const useAppStore = create<AppState & AppActions>()(
         const current = get().lastSelectedSessionByProject;
         if (sessionId === null) {
           // Remove the entry for this project
-          const { [projectPath]: _, ...rest } = current;
+          const rest = Object.fromEntries(
+            Object.entries(current).filter(([key]) => key !== projectPath)
+          );
           set({ lastSelectedSessionByProject: rest });
         } else {
           set({
@@ -1131,6 +1319,151 @@ export const useAppStore = create<AppState & AppActions>()(
       getLastSelectedSession: (projectPath) => {
         return get().lastSelectedSessionByProject[projectPath] || null;
       },
+
+      // Board Background actions
+      setBoardBackground: (projectPath, imagePath) => {
+        const current = get().boardBackgroundByProject;
+        const existing = current[projectPath] || {
+          imagePath: null,
+          cardOpacity: 100,
+          columnOpacity: 100,
+          columnBorderEnabled: true,
+          cardGlassmorphism: true,
+          cardBorderEnabled: true,
+          cardBorderOpacity: 100,
+          hideScrollbar: false,
+        };
+        set({
+          boardBackgroundByProject: {
+            ...current,
+            [projectPath]: {
+              ...existing,
+              imagePath,
+              // Update imageVersion timestamp to bust browser cache when image changes
+              imageVersion: imagePath ? Date.now() : undefined,
+            },
+          },
+        });
+      },
+
+      setCardOpacity: (projectPath, opacity) => {
+        const current = get().boardBackgroundByProject;
+        const existing = current[projectPath] || defaultBackgroundSettings;
+        set({
+          boardBackgroundByProject: {
+            ...current,
+            [projectPath]: {
+              ...existing,
+              cardOpacity: opacity,
+            },
+          },
+        });
+      },
+
+      setColumnOpacity: (projectPath, opacity) => {
+        const current = get().boardBackgroundByProject;
+        const existing = current[projectPath] || defaultBackgroundSettings;
+        set({
+          boardBackgroundByProject: {
+            ...current,
+            [projectPath]: {
+              ...existing,
+              columnOpacity: opacity,
+            },
+          },
+        });
+      },
+
+      getBoardBackground: (projectPath) => {
+        const settings = get().boardBackgroundByProject[projectPath];
+        return settings || defaultBackgroundSettings;
+      },
+
+      setColumnBorderEnabled: (projectPath, enabled) => {
+        const current = get().boardBackgroundByProject;
+        const existing = current[projectPath] || defaultBackgroundSettings;
+        set({
+          boardBackgroundByProject: {
+            ...current,
+            [projectPath]: {
+              ...existing,
+              columnBorderEnabled: enabled,
+            },
+          },
+        });
+      },
+
+      setCardGlassmorphism: (projectPath, enabled) => {
+        const current = get().boardBackgroundByProject;
+        const existing = current[projectPath] || defaultBackgroundSettings;
+        set({
+          boardBackgroundByProject: {
+            ...current,
+            [projectPath]: {
+              ...existing,
+              cardGlassmorphism: enabled,
+            },
+          },
+        });
+      },
+
+      setCardBorderEnabled: (projectPath, enabled) => {
+        const current = get().boardBackgroundByProject;
+        const existing = current[projectPath] || defaultBackgroundSettings;
+        set({
+          boardBackgroundByProject: {
+            ...current,
+            [projectPath]: {
+              ...existing,
+              cardBorderEnabled: enabled,
+            },
+          },
+        });
+      },
+
+      setCardBorderOpacity: (projectPath, opacity) => {
+        const current = get().boardBackgroundByProject;
+        const existing = current[projectPath] || defaultBackgroundSettings;
+        set({
+          boardBackgroundByProject: {
+            ...current,
+            [projectPath]: {
+              ...existing,
+              cardBorderOpacity: opacity,
+            },
+          },
+        });
+      },
+
+      setHideScrollbar: (projectPath, hide) => {
+        const current = get().boardBackgroundByProject;
+        const existing = current[projectPath] || defaultBackgroundSettings;
+        set({
+          boardBackgroundByProject: {
+            ...current,
+            [projectPath]: {
+              ...existing,
+              hideScrollbar: hide,
+            },
+          },
+        });
+      },
+
+      clearBoardBackground: (projectPath) => {
+        const current = get().boardBackgroundByProject;
+        const existing = current[projectPath] || defaultBackgroundSettings;
+        set({
+          boardBackgroundByProject: {
+            ...current,
+            [projectPath]: {
+              ...existing,
+              imagePath: null, // Only clear the image, preserve other settings
+              imageVersion: undefined, // Clear version when clearing image
+            },
+          },
+        });
+      },
+
       // Reset
       reset: () => set(initialState),
     }),
@@ -1178,6 +1511,8 @@ export const useAppStore = create<AppState & AppActions>()(
         aiProfiles: state.aiProfiles,
         chatSessions: state.chatSessions,
         lastSelectedSessionByProject: state.lastSelectedSessionByProject,
+        // Board background settings
+        boardBackgroundByProject: state.boardBackgroundByProject,
       }),
     }
   )

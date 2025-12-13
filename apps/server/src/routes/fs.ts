@@ -500,6 +500,86 @@ export function createFsRoutes(_events: EventEmitter): Router {
     }
   });
 
+  // Save board background image to .automaker/board directory
+  router.post("/save-board-background", async (req: Request, res: Response) => {
+    try {
+      const { data, filename, mimeType, projectPath } = req.body as {
+        data: string;
+        filename: string;
+        mimeType: string;
+        projectPath: string;
+      };
+
+      if (!data || !filename || !projectPath) {
+        res.status(400).json({
+          success: false,
+          error: "data, filename, and projectPath are required",
+        });
+        return;
+      }
+
+      // Create .automaker/board directory if it doesn't exist
+      const boardDir = path.join(projectPath, ".automaker", "board");
+      await fs.mkdir(boardDir, { recursive: true });
+
+      // Decode base64 data (remove data URL prefix if present)
+      const base64Data = data.replace(/^data:image\/\w+;base64,/, "");
+      const buffer = Buffer.from(base64Data, "base64");
+
+      // Use a fixed filename for the board background (overwrite previous)
+      const ext = path.extname(filename) || ".png";
+      const uniqueFilename = `background${ext}`;
+      const filePath = path.join(boardDir, uniqueFilename);
+
+      // Write file
+      await fs.writeFile(filePath, buffer);
+
+      // Add project path to allowed paths if not already
+      addAllowedPath(projectPath);
+
+      // Return the relative path for storage
+      const relativePath = `.automaker/board/${uniqueFilename}`;
+      res.json({ success: true, path: relativePath });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ success: false, error: message });
+    }
+  });
+
+  // Delete board background image
+  router.post("/delete-board-background", async (req: Request, res: Response) => {
+    try {
+      const { projectPath } = req.body as { projectPath: string };
+
+      if (!projectPath) {
+        res.status(400).json({
+          success: false,
+          error: "projectPath is required",
+        });
+        return;
+      }
+
+      const boardDir = path.join(projectPath, ".automaker", "board");
+
+      try {
+        // Try to remove all files in the board directory
+        const files = await fs.readdir(boardDir);
+        for (const file of files) {
+          if (file.startsWith("background")) {
+            await fs.unlink(path.join(boardDir, file));
+          }
+        }
+      } catch {
+        // Directory may not exist, that's fine
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ success: false, error: message });
+    }
+  });
+
   // Browse directories for file picker
   // SECURITY: Restricted to home directory, allowed paths, and drive roots on Windows
   router.post("/browse", async (req: Request, res: Response) => {

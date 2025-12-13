@@ -29,7 +29,8 @@ export type Theme =
   | "gruvbox"
   | "catppuccin"
   | "onedark"
-  | "synthwave";
+  | "synthwave"
+  | "red";
 
 export type KanbanDetailLevel = "minimal" | "standard" | "detailed";
 

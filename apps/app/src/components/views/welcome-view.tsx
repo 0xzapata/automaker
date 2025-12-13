@@ -2,9 +2,6 @@
 
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { HotkeyButton } from "@/components/ui/hotkey-button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -13,14 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { useAppStore } from "@/store/app-store";
+import { useAppStore, type ThemeMode } from "@/store/app-store";
 import { getElectronAPI, type Project } from "@/lib/electron";
 import { initializeProject } from "@/lib/project-init";
 import {
@@ -41,14 +31,22 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { WorkspacePickerModal } from "@/components/workspace-picker-modal";
+import { NewProjectModal } from "@/components/new-project-modal";
 import { getHttpApiClient } from "@/lib/http-api-client";
+import type { StarterTemplate } from "@/lib/templates";
 
 export function WelcomeView() {
-  const { projects, addProject, setCurrentProject, setCurrentView } =
-    useAppStore();
-  const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
-  const [newProjectName, setNewProjectName] = useState("");
-  const [newProjectPath, setNewProjectPath] = useState("");
+  const {
+    projects,
+    trashedProjects,
+    currentProject,
+    upsertAndSetCurrentProject,
+    addProject,
+    setCurrentProject,
+    setCurrentView,
+    theme: globalTheme,
+  } = useAppStore();
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isOpening, setIsOpening] = useState(false);
   const [showInitDialog, setShowInitDialog] = useState(false);
@@ -108,35 +106,14 @@ export function WelcomeView() {
           return;
         }
 
-        // Check if project already exists (by path) to preserve theme and other settings
-        const existingProject = projects.find((p) => p.path === path);
-
-        let project: Project;
-        if (existingProject) {
-          // Update existing project, preserving theme and other properties
-          project = {
-            ...existingProject,
-            name, // Update name in case it changed
-            lastOpened: new Date().toISOString(),
-          };
-          // Update the project in the store (this will update the existing entry)
-          const updatedProjects = projects.map((p) =>
-            p.id === existingProject.id ? project : p
-          );
-          // We need to manually update projects since addProject would create a duplicate
-          useAppStore.setState({ projects: updatedProjects });
-        } else {
-          // Create new project
-          project = {
-            id: `project-${Date.now()}`,
-            name,
-            path,
-            lastOpened: new Date().toISOString(),
-          };
-          addProject(project);
-        }
-
-        setCurrentProject(project);
+        // Upsert project and set as current (handles both create and update cases)
+        // Theme preservation is handled by the store action
+        const trashedProject = trashedProjects.find((p) => p.path === path);
+        const effectiveTheme =
+          (trashedProject?.theme as ThemeMode | undefined) ||
+          (currentProject?.theme as ThemeMode | undefined) ||
+          globalTheme;
+        const project = upsertAndSetCurrentProject(path, name, effectiveTheme);
 
         // Show initialization dialog if files were created
         if (initResult.createdFiles && initResult.createdFiles.length > 0) {
@@ -171,7 +148,13 @@ export function WelcomeView() {
         setIsOpening(false);
       }
     },
-    [projects, addProject, setCurrentProject, analyzeProject]
+    [
+      trashedProjects,
+      currentProject,
+      globalTheme,
+      upsertAndSetCurrentProject,
+      analyzeProject,
+    ]
   );
 
   const handleOpenProject = useCallback(async () => {
@@ -191,7 +174,8 @@ export function WelcomeView() {
         if (!result.canceled && result.filePaths[0]) {
           const path = result.filePaths[0];
           // Extract folder name from path (works on both Windows and Mac/Linux)
-          const name = path.split(/[/\\]/).filter(Boolean).pop() || "Untitled Project";
+          const name =
+            path.split(/[/\\]/).filter(Boolean).pop() || "Untitled Project";
           await initializeAndOpenProject(path, name);
         }
       }
@@ -203,7 +187,8 @@ export function WelcomeView() {
 
       if (!result.canceled && result.filePaths[0]) {
         const path = result.filePaths[0];
-        const name = path.split(/[/\\]/).filter(Boolean).pop() || "Untitled Project";
+        const name =
+          path.split(/[/\\]/).filter(Boolean).pop() || "Untitled Project";
         await initializeAndOpenProject(path, name);
       }
     }
@@ -231,31 +216,24 @@ export function WelcomeView() {
   );
 
   const handleNewProject = () => {
-    setNewProjectName("");
-    setNewProjectPath("");
-    setShowNewProjectDialog(true);
+    setShowNewProjectModal(true);
   };
 
   const handleInteractiveMode = () => {
     setCurrentView("interview");
   };
 
-  const handleSelectDirectory = async () => {
-    const api = getElectronAPI();
-    const result = await api.openDirectory();
-
-    if (!result.canceled && result.filePaths[0]) {
-      setNewProjectPath(result.filePaths[0]);
-    }
-  };
-
-  const handleCreateProject = async () => {
-    if (!newProjectName || !newProjectPath) return;
-
+  /**
+   * Create a blank project with just .automaker directory structure
+   */
+  const handleCreateBlankProject = async (
+    projectName: string,
+    parentDir: string
+  ) => {
     setIsCreating(true);
     try {
       const api = getElectronAPI();
-      const projectPath = `${newProjectPath}/${newProjectName}`;
+      const projectPath = `${parentDir}/${projectName}`;
 
       // Create project directory
       await api.mkdir(projectPath);
@@ -274,7 +252,7 @@ export function WelcomeView() {
       await api.writeFile(
         `${projectPath}/.automaker/app_spec.txt`,
         `<project_specification>
-  <project_name>${newProjectName}</project_name>
+  <project_name>${projectName}</project_name>
 
   <overview>
     Describe your project here. This file will be analyzed by an AI agent
@@ -297,29 +275,233 @@ export function WelcomeView() {
 
       const project = {
         id: `project-${Date.now()}`,
-        name: newProjectName,
+        name: projectName,
         path: projectPath,
         lastOpened: new Date().toISOString(),
       };
 
       addProject(project);
       setCurrentProject(project);
-      setShowNewProjectDialog(false);
+      setShowNewProjectModal(false);
 
       toast.success("Project created", {
-        description: `Created ${newProjectName} with .automaker directory`,
+        description: `Created ${projectName} with .automaker directory`,
       });
 
       // Set init status to show the dialog
       setInitStatus({
         isNewProject: true,
         createdFiles: initResult.createdFiles || [],
-        projectName: newProjectName,
+        projectName: projectName,
         projectPath: projectPath,
       });
       setShowInitDialog(true);
     } catch (error) {
       console.error("Failed to create project:", error);
+      toast.error("Failed to create project", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  /**
+   * Create a project from a GitHub starter template
+   */
+  const handleCreateFromTemplate = async (
+    template: StarterTemplate,
+    projectName: string,
+    parentDir: string
+  ) => {
+    setIsCreating(true);
+    try {
+      const httpClient = getHttpApiClient();
+      const api = getElectronAPI();
+
+      // Clone the template repository
+      const cloneResult = await httpClient.templates.clone(
+        template.repoUrl,
+        projectName,
+        parentDir
+      );
+
+      if (!cloneResult.success || !cloneResult.projectPath) {
+        toast.error("Failed to clone template", {
+          description: cloneResult.error || "Unknown error occurred",
+        });
+        return;
+      }
+
+      const projectPath = cloneResult.projectPath;
+
+      // Initialize .automaker directory with all necessary files
+      const initResult = await initializeProject(projectPath);
+
+      if (!initResult.success) {
+        toast.error("Failed to initialize project", {
+          description: initResult.error || "Unknown error occurred",
+        });
+        return;
+      }
+
+      // Update the app_spec.txt with template-specific info
+      await api.writeFile(
+        `${projectPath}/.automaker/app_spec.txt`,
+        `<project_specification>
+  <project_name>${projectName}</project_name>
+
+  <overview>
+    This project was created from the "${template.name}" starter template.
+    ${template.description}
+  </overview>
+
+  <technology_stack>
+    ${template.techStack
+      .map((tech) => `<technology>${tech}</technology>`)
+      .join("\n    ")}
+  </technology_stack>
+
+  <core_capabilities>
+    ${template.features
+      .map((feature) => `<capability>${feature}</capability>`)
+      .join("\n    ")}
+  </core_capabilities>
+
+  <implemented_features>
+    <!-- The AI agent will populate this based on code analysis -->
+  </implemented_features>
+</project_specification>`
+      );
+
+      const project = {
+        id: `project-${Date.now()}`,
+        name: projectName,
+        path: projectPath,
+        lastOpened: new Date().toISOString(),
+      };
+
+      addProject(project);
+      setCurrentProject(project);
+      setShowNewProjectModal(false);
+
+      toast.success("Project created from template", {
+        description: `Created ${projectName} from ${template.name}`,
+      });
+
+      // Set init status to show the dialog
+      setInitStatus({
+        isNewProject: true,
+        createdFiles: initResult.createdFiles || [],
+        projectName: projectName,
+        projectPath: projectPath,
+      });
+      setShowInitDialog(true);
+
+      // Kick off project analysis
+      analyzeProject(projectPath);
+    } catch (error) {
+      console.error("Failed to create project from template:", error);
+      toast.error("Failed to create project", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  /**
+   * Create a project from a custom GitHub URL
+   */
+  const handleCreateFromCustomUrl = async (
+    repoUrl: string,
+    projectName: string,
+    parentDir: string
+  ) => {
+    setIsCreating(true);
+    try {
+      const httpClient = getHttpApiClient();
+      const api = getElectronAPI();
+
+      // Clone the repository
+      const cloneResult = await httpClient.templates.clone(
+        repoUrl,
+        projectName,
+        parentDir
+      );
+
+      if (!cloneResult.success || !cloneResult.projectPath) {
+        toast.error("Failed to clone repository", {
+          description: cloneResult.error || "Unknown error occurred",
+        });
+        return;
+      }
+
+      const projectPath = cloneResult.projectPath;
+
+      // Initialize .automaker directory with all necessary files
+      const initResult = await initializeProject(projectPath);
+
+      if (!initResult.success) {
+        toast.error("Failed to initialize project", {
+          description: initResult.error || "Unknown error occurred",
+        });
+        return;
+      }
+
+      // Update the app_spec.txt with basic info
+      await api.writeFile(
+        `${projectPath}/.automaker/app_spec.txt`,
+        `<project_specification>
+  <project_name>${projectName}</project_name>
+
+  <overview>
+    This project was cloned from ${repoUrl}.
+    The AI agent will analyze the project structure.
+  </overview>
+
+  <technology_stack>
+    <!-- The AI agent will fill this in after analyzing your project -->
+  </technology_stack>
+
+  <core_capabilities>
+    <!-- List core features and capabilities -->
+  </core_capabilities>
+
+  <implemented_features>
+    <!-- The AI agent will populate this based on code analysis -->
+  </implemented_features>
+</project_specification>`
+      );
+
+      const project = {
+        id: `project-${Date.now()}`,
+        name: projectName,
+        path: projectPath,
+        lastOpened: new Date().toISOString(),
+      };
+
+      addProject(project);
+      setCurrentProject(project);
+      setShowNewProjectModal(false);
+
+      toast.success("Project created from repository", {
+        description: `Created ${projectName} from ${repoUrl}`,
+      });
+
+      // Set init status to show the dialog
+      setInitStatus({
+        isNewProject: true,
+        createdFiles: initResult.createdFiles || [],
+        projectName: projectName,
+        projectPath: projectPath,
+      });
+      setShowInitDialog(true);
+
+      // Kick off project analysis
+      analyzeProject(projectPath);
+    } catch (error) {
+      console.error("Failed to create project from custom URL:", error);
       toast.error("Failed to create project", {
         description: error instanceof Error ? error.message : "Unknown error",
       });
@@ -508,82 +690,15 @@ export function WelcomeView() {
         </div>
       </div>
 
-      {/* New Project Dialog */}
-      <Dialog
-        open={showNewProjectDialog}
-        onOpenChange={setShowNewProjectDialog}
-      >
-        <DialogContent
-          className="bg-card border-border"
-          data-testid="new-project-dialog"
-        >
-          <DialogHeader>
-            <DialogTitle className="text-foreground">
-              Create New Project
-            </DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              Set up a new project directory with initial configuration files.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="project-name" className="text-foreground">
-                Project Name
-              </Label>
-              <Input
-                id="project-name"
-                placeholder="my-awesome-project"
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                className="bg-input border-border text-foreground placeholder:text-muted-foreground"
-                data-testid="project-name-input"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="project-path" className="text-foreground">
-                Parent Directory
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  id="project-path"
-                  placeholder="/path/to/projects"
-                  value={newProjectPath}
-                  onChange={(e) => setNewProjectPath(e.target.value)}
-                  className="flex-1 bg-input border-border text-foreground placeholder:text-muted-foreground"
-                  data-testid="project-path-input"
-                />
-                <Button
-                  variant="secondary"
-                  onClick={handleSelectDirectory}
-                  className="bg-secondary hover:bg-secondary/80 text-foreground border border-border"
-                  data-testid="browse-directory"
-                >
-                  Browse
-                </Button>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setShowNewProjectDialog(false)}
-              className="text-muted-foreground hover:text-foreground hover:bg-accent"
-            >
-              Cancel
-            </Button>
-            <HotkeyButton
-              onClick={handleCreateProject}
-              disabled={!newProjectName || !newProjectPath || isCreating}
-              className="bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-600 text-white border-0"
-              hotkey={{ key: "Enter", cmdCtrl: true }}
-              hotkeyActive={showNewProjectDialog}
-              data-testid="confirm-create-project"
-            >
-              {isCreating ? "Creating..." : "Create Project"}
-            </HotkeyButton>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* New Project Modal */}
+      <NewProjectModal
+        open={showNewProjectModal}
+        onOpenChange={setShowNewProjectModal}
+        onCreateBlankProject={handleCreateBlankProject}
+        onCreateFromTemplate={handleCreateFromTemplate}
+        onCreateFromCustomUrl={handleCreateFromCustomUrl}
+        isCreating={isCreating}
+      />
 
       {/* Project Initialization Dialog */}
       <Dialog open={showInitDialog} onOpenChange={setShowInitDialog}>

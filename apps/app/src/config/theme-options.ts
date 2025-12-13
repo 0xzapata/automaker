@@ -5,6 +5,7 @@ import {
   Eclipse,
   Flame,
   Ghost,
+  Heart,
   Moon,
   Radio,
   Snowflake,
@@ -84,5 +85,11 @@ export const themeOptions: ReadonlyArray<ThemeOption> = [
     label: "Synthwave",
     Icon: Radio,
     testId: "synthwave-mode-button",
+  },
+  {
+    value: "red",
+    label: "Red",
+    Icon: Heart,
+    testId: "red-mode-button",
   },
 ];

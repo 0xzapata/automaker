@@ -9,7 +9,11 @@
  * - Verification and merge workflows
  */
 
-import { query, AbortError, type Options } from "@anthropic-ai/claude-agent-sdk";
+import {
+  query,
+  AbortError,
+  type Options,
+} from "@anthropic-ai/claude-agent-sdk";
 import { exec } from "child_process";
 import { promisify } from "util";
 import path from "path";
@@ -20,11 +24,13 @@ const execAsync = promisify(exec);
 
 interface Feature {
   id: string;
-  title: string;
+  category: string;
   description: string;
+  steps?: string[];
   status: string;
   priority?: number;
-  spec?: string;
+  imagePaths?: Array<string | { path: string; [key: string]: unknown }>;
+  [key: string]: unknown; // Allow additional fields
 }
 
 interface RunningFeature {
@@ -85,7 +91,11 @@ export class AutoModeService {
   }
 
   private async runAutoLoop(): Promise<void> {
-    while (this.autoLoopRunning && this.autoLoopAbortController && !this.autoLoopAbortController.signal.aborted) {
+    while (
+      this.autoLoopRunning &&
+      this.autoLoopAbortController &&
+      !this.autoLoopAbortController.signal.aborted
+    ) {
       try {
         // Check if we have capacity
         if (this.runningFeatures.size >= (this.config?.maxConcurrency || 3)) {
@@ -94,7 +104,9 @@ export class AutoModeService {
         }
 
         // Load pending features
-        const pendingFeatures = await this.loadPendingFeatures(this.config!.projectPath);
+        const pendingFeatures = await this.loadPendingFeatures(
+          this.config!.projectPath
+        );
 
         if (pendingFeatures.length === 0) {
           this.emitAutoModeEvent("auto_mode_complete", {
@@ -105,7 +117,9 @@ export class AutoModeService {
         }
 
         // Find a feature not currently running
-        const nextFeature = pendingFeatures.find((f) => !this.runningFeatures.has(f.id));
+        const nextFeature = pendingFeatures.find(
+          (f) => !this.runningFeatures.has(f.id)
+        );
 
         if (nextFeature) {
           // Start feature execution in background
@@ -164,7 +178,11 @@ export class AutoModeService {
 
     // Setup worktree if enabled
     if (useWorktrees) {
-      worktreePath = await this.setupWorktree(projectPath, featureId, branchName);
+      worktreePath = await this.setupWorktree(
+        projectPath,
+        featureId,
+        branchName
+      );
     }
 
     const workDir = worktreePath || projectPath;
@@ -183,7 +201,11 @@ export class AutoModeService {
     this.emitAutoModeEvent("auto_mode_feature_start", {
       featureId,
       projectPath,
-      feature: { id: featureId, title: "Loading...", description: "Feature is starting" },
+      feature: {
+        id: featureId,
+        title: "Loading...",
+        description: "Feature is starting",
+      },
     });
 
     try {
@@ -199,20 +221,38 @@ export class AutoModeService {
       // Build the prompt
       const prompt = this.buildFeaturePrompt(feature);
 
-      // Run the agent
-      await this.runAgent(workDir, featureId, prompt, abortController);
+      // Extract image paths from feature
+      const imagePaths = this.extractImagePaths(feature.imagePaths, workDir);
+
+      // Run the agent with image paths
+      await this.runAgent(
+        workDir,
+        featureId,
+        prompt,
+        abortController,
+        imagePaths
+      );
 
       // Mark as waiting_approval for user review
-      await this.updateFeatureStatus(projectPath, featureId, "waiting_approval");
+      await this.updateFeatureStatus(
+        projectPath,
+        featureId,
+        "waiting_approval"
+      );
 
       this.emitAutoModeEvent("auto_mode_feature_complete", {
         featureId,
         passes: true,
-        message: `Feature completed in ${Math.round((Date.now() - this.runningFeatures.get(featureId)!.startTime) / 1000)}s`,
+        message: `Feature completed in ${Math.round(
+          (Date.now() - this.runningFeatures.get(featureId)!.startTime) / 1000
+        )}s`,
         projectPath,
       });
     } catch (error) {
-      if (error instanceof AbortError || (error as Error)?.name === "AbortError") {
+      if (
+        error instanceof AbortError ||
+        (error as Error)?.name === "AbortError"
+      ) {
         this.emitAutoModeEvent("auto_mode_feature_complete", {
           featureId,
           passes: false,
@@ -221,9 +261,10 @@ export class AutoModeService {
         });
       } else {
         const errorMessage = (error as Error).message || "Unknown error";
-        const isAuthError = errorMessage.includes("Authentication failed") ||
-                           errorMessage.includes("Invalid API key") ||
-                           errorMessage.includes("authentication_failed");
+        const isAuthError =
+          errorMessage.includes("Authentication failed") ||
+          errorMessage.includes("Invalid API key") ||
+          errorMessage.includes("authentication_failed");
 
         console.error(`[AutoMode] Feature ${featureId} failed:`, error);
         await this.updateFeatureStatus(projectPath, featureId, "backlog");
@@ -280,7 +321,12 @@ export class AutoModeService {
     if (hasContext) {
       // Load previous context and continue
       const context = await fs.readFile(contextPath, "utf-8");
-      return this.executeFeatureWithContext(projectPath, featureId, context, useWorktrees);
+      return this.executeFeatureWithContext(
+        projectPath,
+        featureId,
+        context,
+        useWorktrees
+      );
     }
 
     // No context, start fresh
@@ -303,7 +349,12 @@ export class AutoModeService {
     const abortController = new AbortController();
 
     // Check if worktree exists
-    const worktreePath = path.join(projectPath, ".automaker", "worktrees", featureId);
+    const worktreePath = path.join(
+      projectPath,
+      ".automaker",
+      "worktrees",
+      featureId
+    );
     let workDir = projectPath;
 
     try {
@@ -366,14 +417,28 @@ Address the follow-up instructions above. Review the previous work and make the 
     this.emitAutoModeEvent("auto_mode_feature_start", {
       featureId,
       projectPath,
-      feature: feature || { id: featureId, title: "Follow-up", description: prompt.substring(0, 100) },
+      feature: feature || {
+        id: featureId,
+        title: "Follow-up",
+        description: prompt.substring(0, 100),
+      },
     });
 
     try {
-      await this.runAgent(workDir, featureId, fullPrompt, abortController, imagePaths);
+      await this.runAgent(
+        workDir,
+        featureId,
+        fullPrompt,
+        abortController,
+        imagePaths
+      );
 
       // Mark as waiting_approval for user review
-      await this.updateFeatureStatus(projectPath, featureId, "waiting_approval");
+      await this.updateFeatureStatus(
+        projectPath,
+        featureId,
+        "waiting_approval"
+      );
 
       this.emitAutoModeEvent("auto_mode_feature_complete", {
         featureId,
@@ -397,8 +462,16 @@ Address the follow-up instructions above. Review the previous work and make the 
   /**
    * Verify a feature's implementation
    */
-  async verifyFeature(projectPath: string, featureId: string): Promise<boolean> {
-    const worktreePath = path.join(projectPath, ".automaker", "worktrees", featureId);
+  async verifyFeature(
+    projectPath: string,
+    featureId: string
+  ): Promise<boolean> {
+    const worktreePath = path.join(
+      projectPath,
+      ".automaker",
+      "worktrees",
+      featureId
+    );
     let workDir = projectPath;
 
     try {
@@ -417,7 +490,8 @@ Address the follow-up instructions above. Review the previous work and make the 
     ];
 
     let allPassed = true;
-    const results: Array<{ check: string; passed: boolean; output?: string }> = [];
+    const results: Array<{ check: string; passed: boolean; output?: string }> =
+      [];
 
     for (const check of verificationChecks) {
       try {
@@ -425,7 +499,11 @@ Address the follow-up instructions above. Review the previous work and make the 
           cwd: workDir,
           timeout: 120000,
         });
-        results.push({ check: check.name, passed: true, output: stdout || stderr });
+        results.push({
+          check: check.name,
+          passed: true,
+          output: stdout || stderr,
+        });
       } catch (error) {
         allPassed = false;
         results.push({
@@ -442,7 +520,9 @@ Address the follow-up instructions above. Review the previous work and make the 
       passes: allPassed,
       message: allPassed
         ? "All verification checks passed"
-        : `Verification failed: ${results.find(r => !r.passed)?.check || "Unknown"}`,
+        : `Verification failed: ${
+            results.find((r) => !r.passed)?.check || "Unknown"
+          }`,
     });
 
     return allPassed;
@@ -451,8 +531,16 @@ Address the follow-up instructions above. Review the previous work and make the 
   /**
    * Commit feature changes
    */
-  async commitFeature(projectPath: string, featureId: string): Promise<string | null> {
-    const worktreePath = path.join(projectPath, ".automaker", "worktrees", featureId);
+  async commitFeature(
+    projectPath: string,
+    featureId: string
+  ): Promise<string | null> {
+    const worktreePath = path.join(
+      projectPath,
+      ".automaker",
+      "worktrees",
+      featureId
+    );
     let workDir = projectPath;
 
     try {
@@ -464,7 +552,9 @@ Address the follow-up instructions above. Review the previous work and make the 
 
     try {
       // Check for changes
-      const { stdout: status } = await execAsync("git status --porcelain", { cwd: workDir });
+      const { stdout: status } = await execAsync("git status --porcelain", {
+        cwd: workDir,
+      });
       if (!status.trim()) {
         return null; // No changes
       }
@@ -472,7 +562,9 @@ Address the follow-up instructions above. Review the previous work and make the 
       // Load feature for commit message
       const feature = await this.loadFeature(projectPath, featureId);
       const commitMessage = feature
-        ? `feat: ${feature.title}\n\nImplemented by Automaker auto-mode`
+        ? `feat: ${this.extractTitleFromDescription(
+            feature.description
+          )}\n\nImplemented by Automaker auto-mode`
         : `feat: Feature ${featureId}`;
 
       // Stage and commit
@@ -482,7 +574,9 @@ Address the follow-up instructions above. Review the previous work and make the 
       });
 
       // Get commit hash
-      const { stdout: hash } = await execAsync("git rev-parse HEAD", { cwd: workDir });
+      const { stdout: hash } = await execAsync("git rev-parse HEAD", {
+        cwd: workDir,
+      });
 
       this.emitAutoModeEvent("auto_mode_feature_complete", {
         featureId,
@@ -500,7 +594,10 @@ Address the follow-up instructions above. Review the previous work and make the 
   /**
    * Check if context exists for a feature
    */
-  async contextExists(projectPath: string, featureId: string): Promise<boolean> {
+  async contextExists(
+    projectPath: string,
+    featureId: string
+  ): Promise<boolean> {
     const contextPath = path.join(
       projectPath,
       ".automaker",
@@ -527,7 +624,11 @@ Address the follow-up instructions above. Review the previous work and make the 
     this.emitAutoModeEvent("auto_mode_feature_start", {
       featureId: analysisFeatureId,
       projectPath,
-      feature: { id: analysisFeatureId, title: "Project Analysis", description: "Analyzing project structure" },
+      feature: {
+        id: analysisFeatureId,
+        title: "Project Analysis",
+        description: "Analyzing project structure",
+      },
     });
 
     const prompt = `Analyze this project and provide a summary of:
@@ -570,7 +671,11 @@ Format your response as a structured markdown document.`;
       }
 
       // Save analysis
-      const analysisPath = path.join(projectPath, ".automaker", "project-analysis.md");
+      const analysisPath = path.join(
+        projectPath,
+        ".automaker",
+        "project-analysis.md"
+      );
       await fs.mkdir(path.dirname(analysisPath), { recursive: true });
       await fs.writeFile(analysisPath, analysisResult);
 
@@ -604,6 +709,23 @@ Format your response as a structured markdown document.`;
       runningFeatures: Array.from(this.runningFeatures.keys()),
       runningCount: this.runningFeatures.size,
     };
+  }
+
+  /**
+   * Get detailed info about all running agents
+   */
+  getRunningAgents(): Array<{
+    featureId: string;
+    projectPath: string;
+    projectName: string;
+    isAutoMode: boolean;
+  }> {
+    return Array.from(this.runningFeatures.values()).map((rf) => ({
+      featureId: rf.featureId,
+      projectPath: rf.projectPath,
+      projectName: path.basename(rf.projectPath),
+      isAutoMode: rf.isAutoMode,
+    }));
   }
 
   // Private helpers
@@ -647,7 +769,10 @@ Format your response as a structured markdown document.`;
     return worktreePath;
   }
 
-  private async loadFeature(projectPath: string, featureId: string): Promise<Feature | null> {
+  private async loadFeature(
+    projectPath: string,
+    featureId: string
+  ): Promise<Feature | null> {
     const featurePath = path.join(
       projectPath,
       ".automaker",
@@ -682,6 +807,14 @@ Format your response as a structured markdown document.`;
       const feature = JSON.parse(data);
       feature.status = status;
       feature.updatedAt = new Date().toISOString();
+      // Set justFinishedAt timestamp when moving to waiting_approval (agent just completed)
+      // Badge will show for 2 minutes after this timestamp
+      if (status === "waiting_approval") {
+        feature.justFinishedAt = new Date().toISOString();
+      } else {
+        // Clear the timestamp when moving to other statuses
+        feature.justFinishedAt = undefined;
+      }
       await fs.writeFile(featurePath, JSON.stringify(feature, null, 2));
     } catch {
       // Feature file may not exist
@@ -697,7 +830,11 @@ Format your response as a structured markdown document.`;
 
       for (const entry of entries) {
         if (entry.isDirectory()) {
-          const featurePath = path.join(featuresDir, entry.name, "feature.json");
+          const featurePath = path.join(
+            featuresDir,
+            entry.name,
+            "feature.json"
+          );
           try {
             const data = await fs.readFile(featurePath, "utf-8");
             const feature = JSON.parse(data);
@@ -717,20 +854,58 @@ Format your response as a structured markdown document.`;
     }
   }
 
+  /**
+   * Extract a title from feature description (first line or truncated)
+   */
+  private extractTitleFromDescription(description: string): string {
+    if (!description || !description.trim()) {
+      return "Untitled Feature";
+    }
+
+    // Get first line, or first 60 characters if no newline
+    const firstLine = description.split("\n")[0].trim();
+    if (firstLine.length <= 60) {
+      return firstLine;
+    }
+
+    // Truncate to 60 characters and add ellipsis
+    return firstLine.substring(0, 57) + "...";
+  }
+
+  /**
+   * Extract image paths from feature's imagePaths array
+   * Handles both string paths and objects with path property
+   */
+  private extractImagePaths(
+    imagePaths:
+      | Array<string | { path: string; [key: string]: unknown }>
+      | undefined,
+    projectPath: string
+  ): string[] {
+    if (!imagePaths || imagePaths.length === 0) {
+      return [];
+    }
+
+    return imagePaths
+      .map((imgPath) => {
+        const pathStr = typeof imgPath === "string" ? imgPath : imgPath.path;
+        // Resolve relative paths to absolute paths
+        return path.isAbsolute(pathStr)
+          ? pathStr
+          : path.join(projectPath, pathStr);
+      })
+      .filter((p) => p); // Filter out any empty paths
+  }
+
   private buildFeaturePrompt(feature: Feature): string {
+    const title = this.extractTitleFromDescription(feature.description);
+
     let prompt = `## Feature Implementation Task
 
 **Feature ID:** ${feature.id}
-**Title:** ${feature.title}
+**Title:** ${title}
 **Description:** ${feature.description}
 `;
-
-    if (feature.spec) {
-      prompt += `
-**Specification:**
-${feature.spec}
-`;
-    }
 
     prompt += `
 ## Instructions
@@ -758,14 +933,7 @@ When done, summarize what you implemented and any notes for the developer.`;
       model: "claude-opus-4-5-20251101",
       maxTurns: 50,
       cwd: workDir,
-      allowedTools: [
-        "Read",
-        "Write",
-        "Edit",
-        "Glob",
-        "Grep",
-        "Bash",
-      ],
+      allowedTools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash"],
       permissionMode: "acceptEdits",
       sandbox: {
         enabled: true,
@@ -778,12 +946,20 @@ When done, summarize what you implemented and any notes for the developer.`;
     let finalPrompt = prompt;
 
     if (imagePaths && imagePaths.length > 0) {
-      finalPrompt = `${prompt}\n\n## Reference Images\nThe following images are available for reference. Use the Read tool to view them:\n${imagePaths.map((p) => `- ${p}`).join("\n")}`;
+      finalPrompt = `${prompt}\n\n## Reference Images\nThe following images are available for reference. Use the Read tool to view them:\n${imagePaths
+        .map((p) => `- ${p}`)
+        .join("\n")}`;
     }
 
     const stream = query({ prompt: finalPrompt, options });
     let responseText = "";
-    const outputPath = path.join(workDir, ".automaker", "features", featureId, "agent-output.md");
+    const outputPath = path.join(
+      workDir,
+      ".automaker",
+      "features",
+      featureId,
+      "agent-output.md"
+    );
 
     for await (const msg of stream) {
       if (msg.type === "assistant" && msg.message.content) {
@@ -792,12 +968,14 @@ When done, summarize what you implemented and any notes for the developer.`;
             responseText = block.text;
 
             // Check for authentication errors in the response
-            if (block.text.includes("Invalid API key") ||
-                block.text.includes("authentication_failed") ||
-                block.text.includes("Fix external API key")) {
+            if (
+              block.text.includes("Invalid API key") ||
+              block.text.includes("authentication_failed") ||
+              block.text.includes("Fix external API key")
+            ) {
               throw new Error(
                 "Authentication failed: Invalid or expired API key. " +
-                "Please check your ANTHROPIC_API_KEY or run 'claude login' to re-authenticate."
+                  "Please check your ANTHROPIC_API_KEY or run 'claude login' to re-authenticate."
               );
             }
 
@@ -813,18 +991,21 @@ When done, summarize what you implemented and any notes for the developer.`;
             });
           }
         }
-      } else if (msg.type === "assistant" && (msg as { error?: string }).error === "authentication_failed") {
+      } else if (
+        msg.type === "assistant" &&
+        (msg as { error?: string }).error === "authentication_failed"
+      ) {
         // Handle authentication error from the SDK
         throw new Error(
           "Authentication failed: Invalid or expired API key. " +
-          "Please set a valid ANTHROPIC_API_KEY environment variable or run 'claude login' to authenticate."
+            "Please set a valid ANTHROPIC_API_KEY environment variable or run 'claude login' to authenticate."
         );
       } else if (msg.type === "result" && msg.subtype === "success") {
         // Check if result indicates an error
         if (msg.is_error && msg.result?.includes("Invalid API key")) {
           throw new Error(
             "Authentication failed: Invalid or expired API key. " +
-            "Please set a valid ANTHROPIC_API_KEY environment variable or run 'claude login' to authenticate."
+              "Please set a valid ANTHROPIC_API_KEY environment variable or run 'claude login' to authenticate."
           );
         }
         responseText = msg.result || responseText;
