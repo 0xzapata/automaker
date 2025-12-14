@@ -49,7 +49,9 @@ export interface ShortcutKey {
 }
 
 // Helper to parse shortcut string to ShortcutKey object
-export function parseShortcut(shortcut: string | undefined | null): ShortcutKey {
+export function parseShortcut(
+  shortcut: string | undefined | null
+): ShortcutKey {
   if (!shortcut) return { key: "" };
   const parts = shortcut.split("+").map((p) => p.trim());
   const result: ShortcutKey = { key: parts[parts.length - 1] };
@@ -82,7 +84,10 @@ export function parseShortcut(shortcut: string | undefined | null): ShortcutKey 
 }
 
 // Helper to format ShortcutKey to display string
-export function formatShortcut(shortcut: string | undefined | null, forDisplay = false): string {
+export function formatShortcut(
+  shortcut: string | undefined | null,
+  forDisplay = false
+): string {
   if (!shortcut) return "";
   const parsed = parseShortcut(shortcut);
   const parts: string[] = [];
@@ -179,7 +184,7 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
   context: "C",
   settings: "S",
   profiles: "M",
-  terminal: "Cmd+`",
+  terminal: "T",
 
   // UI
   toggleSidebar: "`",
@@ -308,7 +313,12 @@ export interface ProjectAnalysis {
 // Terminal panel layout types (recursive for splits)
 export type TerminalPanelContent =
   | { type: "terminal"; sessionId: string; size?: number; fontSize?: number }
-  | { type: "split"; direction: "horizontal" | "vertical"; panels: TerminalPanelContent[]; size?: number };
+  | {
+      type: "split";
+      direction: "horizontal" | "vertical";
+      panels: TerminalPanelContent[];
+      size?: number;
+    };
 
 // Terminal tab - each tab has its own layout
 export interface TerminalTab {
@@ -600,7 +610,11 @@ export interface AppActions {
   // Terminal actions
   setTerminalUnlocked: (unlocked: boolean, token?: string) => void;
   setActiveTerminalSession: (sessionId: string | null) => void;
-  addTerminalToLayout: (sessionId: string, direction?: "horizontal" | "vertical", targetSessionId?: string) => void;
+  addTerminalToLayout: (
+    sessionId: string,
+    direction?: "horizontal" | "vertical",
+    targetSessionId?: string
+  ) => void;
   removeTerminalFromLayout: (sessionId: string) => void;
   swapTerminals: (sessionId1: string, sessionId2: string) => void;
   clearTerminalState: () => void;
@@ -610,7 +624,11 @@ export interface AppActions {
   setActiveTerminalTab: (tabId: string) => void;
   renameTerminalTab: (tabId: string, name: string) => void;
   moveTerminalToTab: (sessionId: string, targetTabId: string | "new") => void;
-  addTerminalToTab: (sessionId: string, tabId: string, direction?: "horizontal" | "vertical") => void;
+  addTerminalToTab: (
+    sessionId: string,
+    tabId: string,
+    direction?: "horizontal" | "vertical"
+  ) => void;
 
   // Reset
   reset: () => void;
@@ -1331,8 +1349,10 @@ export const useAppStore = create<AppState & AppActions>()(
 
       resetAIProfiles: () => {
         // Merge: keep user-created profiles, but refresh all built-in profiles to latest defaults
-        const defaultProfileIds = new Set(DEFAULT_AI_PROFILES.map(p => p.id));
-        const userProfiles = get().aiProfiles.filter(p => !p.isBuiltIn && !defaultProfileIds.has(p.id));
+        const defaultProfileIds = new Set(DEFAULT_AI_PROFILES.map((p) => p.id));
+        const userProfiles = get().aiProfiles.filter(
+          (p) => !p.isBuiltIn && !defaultProfileIds.has(p.id)
+        );
         set({ aiProfiles: [...DEFAULT_AI_PROFILES, ...userProfiles] });
       },
 
@@ -1528,9 +1548,17 @@ export const useAppStore = create<AppState & AppActions>()(
         });
       },
 
-      addTerminalToLayout: (sessionId, direction = "horizontal", targetSessionId) => {
+      addTerminalToLayout: (
+        sessionId,
+        direction = "horizontal",
+        targetSessionId
+      ) => {
         const current = get().terminalState;
-        const newTerminal: TerminalPanelContent = { type: "terminal", sessionId, size: 50 };
+        const newTerminal: TerminalPanelContent = {
+          type: "terminal",
+          sessionId,
+          size: 50,
+        };
 
         // If no tabs, create first tab
         if (current.tabs.length === 0) {
@@ -1538,7 +1566,13 @@ export const useAppStore = create<AppState & AppActions>()(
           set({
             terminalState: {
               ...current,
-              tabs: [{ id: newTabId, name: "Terminal 1", layout: { type: "terminal", sessionId, size: 100 } }],
+              tabs: [
+                {
+                  id: newTabId,
+                  name: "Terminal 1",
+                  layout: { type: "terminal", sessionId, size: 100 },
+                },
+              ],
               activeTabId: newTabId,
               activeSessionId: sessionId,
             },
@@ -1547,7 +1581,9 @@ export const useAppStore = create<AppState & AppActions>()(
         }
 
         // Add to active tab's layout
-        const activeTab = current.tabs.find(t => t.id === current.activeTabId);
+        const activeTab = current.tabs.find(
+          (t) => t.id === current.activeTabId
+        );
         if (!activeTab) return;
 
         // If targetSessionId is provided, find and split that specific terminal
@@ -1571,7 +1607,9 @@ export const useAppStore = create<AppState & AppActions>()(
           // It's a split - recurse into panels
           return {
             ...node,
-            panels: node.panels.map(p => splitTargetTerminal(p, targetId, targetDirection)),
+            panels: node.panels.map((p) =>
+              splitTargetTerminal(p, targetId, targetDirection)
+            ),
           };
         };
 
@@ -1592,7 +1630,10 @@ export const useAppStore = create<AppState & AppActions>()(
             const newSize = 100 / (node.panels.length + 1);
             return {
               ...node,
-              panels: [...node.panels.map(p => ({ ...p, size: newSize })), { ...newTerminal, size: newSize }],
+              panels: [
+                ...node.panels.map((p) => ({ ...p, size: newSize })),
+                { ...newTerminal, size: newSize },
+              ],
             };
           }
           // Different direction, wrap in new split
@@ -1607,12 +1648,16 @@ export const useAppStore = create<AppState & AppActions>()(
         if (!activeTab.layout) {
           newLayout = { type: "terminal", sessionId, size: 100 };
         } else if (targetSessionId) {
-          newLayout = splitTargetTerminal(activeTab.layout, targetSessionId, direction);
+          newLayout = splitTargetTerminal(
+            activeTab.layout,
+            targetSessionId,
+            direction
+          );
         } else {
           newLayout = addToRootLayout(activeTab.layout, direction);
         }
 
-        const newTabs = current.tabs.map(t =>
+        const newTabs = current.tabs.map((t) =>
           t.id === current.activeTabId ? { ...t, layout: newLayout } : t
         );
 
@@ -1630,7 +1675,9 @@ export const useAppStore = create<AppState & AppActions>()(
         if (current.tabs.length === 0) return;
 
         // Find which tab contains this session
-        const findFirstTerminal = (node: TerminalPanelContent | null): string | null => {
+        const findFirstTerminal = (
+          node: TerminalPanelContent | null
+        ): string | null => {
           if (!node) return null;
           if (node.type === "terminal") return node.sessionId;
           for (const panel of node.panels) {
@@ -1640,7 +1687,9 @@ export const useAppStore = create<AppState & AppActions>()(
           return null;
         };
 
-        const removeAndCollapse = (node: TerminalPanelContent): TerminalPanelContent | null => {
+        const removeAndCollapse = (
+          node: TerminalPanelContent
+        ): TerminalPanelContent | null => {
           if (node.type === "terminal") {
             return node.sessionId === sessionId ? null : node;
           }
@@ -1654,19 +1703,27 @@ export const useAppStore = create<AppState & AppActions>()(
           return { ...node, panels: newPanels };
         };
 
-        let newTabs = current.tabs.map(tab => {
+        let newTabs = current.tabs.map((tab) => {
           if (!tab.layout) return tab;
           const newLayout = removeAndCollapse(tab.layout);
           return { ...tab, layout: newLayout };
         });
 
         // Remove empty tabs
-        newTabs = newTabs.filter(tab => tab.layout !== null);
+        newTabs = newTabs.filter((tab) => tab.layout !== null);
 
         // Determine new active session
-        const newActiveTabId = newTabs.length > 0 ? (current.activeTabId && newTabs.find(t => t.id === current.activeTabId) ? current.activeTabId : newTabs[0].id) : null;
+        const newActiveTabId =
+          newTabs.length > 0
+            ? current.activeTabId &&
+              newTabs.find((t) => t.id === current.activeTabId)
+              ? current.activeTabId
+              : newTabs[0].id
+            : null;
         const newActiveSessionId = newActiveTabId
-          ? findFirstTerminal(newTabs.find(t => t.id === newActiveTabId)?.layout || null)
+          ? findFirstTerminal(
+              newTabs.find((t) => t.id === newActiveTabId)?.layout || null
+            )
           : null;
 
         set({
@@ -1683,16 +1740,20 @@ export const useAppStore = create<AppState & AppActions>()(
         const current = get().terminalState;
         if (current.tabs.length === 0) return;
 
-        const swapInLayout = (node: TerminalPanelContent): TerminalPanelContent => {
+        const swapInLayout = (
+          node: TerminalPanelContent
+        ): TerminalPanelContent => {
           if (node.type === "terminal") {
-            if (node.sessionId === sessionId1) return { ...node, sessionId: sessionId2 };
-            if (node.sessionId === sessionId2) return { ...node, sessionId: sessionId1 };
+            if (node.sessionId === sessionId1)
+              return { ...node, sessionId: sessionId2 };
+            if (node.sessionId === sessionId2)
+              return { ...node, sessionId: sessionId1 };
             return node;
           }
           return { ...node, panels: node.panels.map(swapInLayout) };
         };
 
-        const newTabs = current.tabs.map(tab => ({
+        const newTabs = current.tabs.map((tab) => ({
           ...tab,
           layout: tab.layout ? swapInLayout(tab.layout) : null,
         }));
@@ -1719,7 +1780,9 @@ export const useAppStore = create<AppState & AppActions>()(
         const current = get().terminalState;
         const clampedSize = Math.max(8, Math.min(32, fontSize));
 
-        const updateFontSize = (node: TerminalPanelContent): TerminalPanelContent => {
+        const updateFontSize = (
+          node: TerminalPanelContent
+        ): TerminalPanelContent => {
           if (node.type === "terminal") {
             if (node.sessionId === sessionId) {
               return { ...node, fontSize: clampedSize };
@@ -1729,7 +1792,7 @@ export const useAppStore = create<AppState & AppActions>()(
           return { ...node, panels: node.panels.map(updateFontSize) };
         };
 
-        const newTabs = current.tabs.map(tab => {
+        const newTabs = current.tabs.map((tab) => {
           if (!tab.layout) return tab;
           return { ...tab, layout: updateFontSize(tab.layout) };
         });
@@ -1743,7 +1806,11 @@ export const useAppStore = create<AppState & AppActions>()(
         const current = get().terminalState;
         const newTabId = `tab-${Date.now()}`;
         const tabNumber = current.tabs.length + 1;
-        const newTab: TerminalTab = { id: newTabId, name: name || `Terminal ${tabNumber}`, layout: null };
+        const newTab: TerminalTab = {
+          id: newTabId,
+          name: name || `Terminal ${tabNumber}`,
+          layout: null,
+        };
         set({
           terminalState: {
             ...current,
@@ -1756,14 +1823,14 @@ export const useAppStore = create<AppState & AppActions>()(
 
       removeTerminalTab: (tabId) => {
         const current = get().terminalState;
-        const newTabs = current.tabs.filter(t => t.id !== tabId);
+        const newTabs = current.tabs.filter((t) => t.id !== tabId);
         let newActiveTabId = current.activeTabId;
         let newActiveSessionId = current.activeSessionId;
 
         if (current.activeTabId === tabId) {
           newActiveTabId = newTabs.length > 0 ? newTabs[0].id : null;
           if (newActiveTabId) {
-            const newActiveTab = newTabs.find(t => t.id === newActiveTabId);
+            const newActiveTab = newTabs.find((t) => t.id === newActiveTabId);
             const findFirst = (node: TerminalPanelContent): string | null => {
               if (node.type === "terminal") return node.sessionId;
               for (const p of node.panels) {
@@ -1772,20 +1839,27 @@ export const useAppStore = create<AppState & AppActions>()(
               }
               return null;
             };
-            newActiveSessionId = newActiveTab?.layout ? findFirst(newActiveTab.layout) : null;
+            newActiveSessionId = newActiveTab?.layout
+              ? findFirst(newActiveTab.layout)
+              : null;
           } else {
             newActiveSessionId = null;
           }
         }
 
         set({
-          terminalState: { ...current, tabs: newTabs, activeTabId: newActiveTabId, activeSessionId: newActiveSessionId },
+          terminalState: {
+            ...current,
+            tabs: newTabs,
+            activeTabId: newActiveTabId,
+            activeSessionId: newActiveSessionId,
+          },
         });
       },
 
       setActiveTerminalTab: (tabId) => {
         const current = get().terminalState;
-        const tab = current.tabs.find(t => t.id === tabId);
+        const tab = current.tabs.find((t) => t.id === tabId);
         if (!tab) return;
 
         let newActiveSessionId = current.activeSessionId;
@@ -1802,13 +1876,19 @@ export const useAppStore = create<AppState & AppActions>()(
         }
 
         set({
-          terminalState: { ...current, activeTabId: tabId, activeSessionId: newActiveSessionId },
+          terminalState: {
+            ...current,
+            activeTabId: tabId,
+            activeSessionId: newActiveSessionId,
+          },
         });
       },
 
       renameTerminalTab: (tabId, name) => {
         const current = get().terminalState;
-        const newTabs = current.tabs.map(t => t.id === tabId ? { ...t, name } : t);
+        const newTabs = current.tabs.map((t) =>
+          t.id === tabId ? { ...t, name } : t
+        );
         set({
           terminalState: { ...current, tabs: newTabs },
         });
@@ -1818,9 +1898,13 @@ export const useAppStore = create<AppState & AppActions>()(
         const current = get().terminalState;
 
         let sourceTabId: string | null = null;
-        let originalTerminalNode: (TerminalPanelContent & { type: "terminal" }) | null = null;
+        let originalTerminalNode:
+          | (TerminalPanelContent & { type: "terminal" })
+          | null = null;
 
-        const findTerminal = (node: TerminalPanelContent): (TerminalPanelContent & { type: "terminal" }) | null => {
+        const findTerminal = (
+          node: TerminalPanelContent
+        ): (TerminalPanelContent & { type: "terminal" }) | null => {
           if (node.type === "terminal") {
             return node.sessionId === sessionId ? node : null;
           }
@@ -1844,10 +1928,12 @@ export const useAppStore = create<AppState & AppActions>()(
         if (!sourceTabId || !originalTerminalNode) return;
         if (sourceTabId === targetTabId) return;
 
-        const sourceTab = current.tabs.find(t => t.id === sourceTabId);
+        const sourceTab = current.tabs.find((t) => t.id === sourceTabId);
         if (!sourceTab?.layout) return;
 
-        const removeAndCollapse = (node: TerminalPanelContent): TerminalPanelContent | null => {
+        const removeAndCollapse = (
+          node: TerminalPanelContent
+        ): TerminalPanelContent | null => {
           if (node.type === "terminal") {
             return node.sessionId === sessionId ? null : node;
           }
@@ -1869,21 +1955,42 @@ export const useAppStore = create<AppState & AppActions>()(
         if (targetTabId === "new") {
           const newTabId = `tab-${Date.now()}`;
           const sourceWillBeRemoved = !newSourceLayout;
-          const tabName = sourceWillBeRemoved ? sourceTab.name : `Terminal ${current.tabs.length + 1}`;
+          const tabName = sourceWillBeRemoved
+            ? sourceTab.name
+            : `Terminal ${current.tabs.length + 1}`;
           newTabs = [
             ...current.tabs,
-            { id: newTabId, name: tabName, layout: { type: "terminal", sessionId, size: 100, fontSize: originalTerminalNode.fontSize } },
+            {
+              id: newTabId,
+              name: tabName,
+              layout: {
+                type: "terminal",
+                sessionId,
+                size: 100,
+                fontSize: originalTerminalNode.fontSize,
+              },
+            },
           ];
           finalTargetTabId = newTabId;
         } else {
-          const targetTab = current.tabs.find(t => t.id === targetTabId);
+          const targetTab = current.tabs.find((t) => t.id === targetTabId);
           if (!targetTab) return;
 
-          const terminalNode: TerminalPanelContent = { type: "terminal", sessionId, size: 50, fontSize: originalTerminalNode.fontSize };
+          const terminalNode: TerminalPanelContent = {
+            type: "terminal",
+            sessionId,
+            size: 50,
+            fontSize: originalTerminalNode.fontSize,
+          };
           let newTargetLayout: TerminalPanelContent;
 
           if (!targetTab.layout) {
-            newTargetLayout = { type: "terminal", sessionId, size: 100, fontSize: originalTerminalNode.fontSize };
+            newTargetLayout = {
+              type: "terminal",
+              sessionId,
+              size: 100,
+              fontSize: originalTerminalNode.fontSize,
+            };
           } else if (targetTab.layout.type === "terminal") {
             newTargetLayout = {
               type: "split",
@@ -1897,15 +2004,15 @@ export const useAppStore = create<AppState & AppActions>()(
             };
           }
 
-          newTabs = current.tabs.map(t =>
+          newTabs = current.tabs.map((t) =>
             t.id === targetTabId ? { ...t, layout: newTargetLayout } : t
           );
         }
 
         if (!newSourceLayout) {
-          newTabs = newTabs.filter(t => t.id !== sourceTabId);
+          newTabs = newTabs.filter((t) => t.id !== sourceTabId);
         } else {
-          newTabs = newTabs.map(t =>
+          newTabs = newTabs.map((t) =>
             t.id === sourceTabId ? { ...t, layout: newSourceLayout } : t
           );
         }
@@ -1922,10 +2029,14 @@ export const useAppStore = create<AppState & AppActions>()(
 
       addTerminalToTab: (sessionId, tabId, direction = "horizontal") => {
         const current = get().terminalState;
-        const tab = current.tabs.find(t => t.id === tabId);
+        const tab = current.tabs.find((t) => t.id === tabId);
         if (!tab) return;
 
-        const terminalNode: TerminalPanelContent = { type: "terminal", sessionId, size: 50 };
+        const terminalNode: TerminalPanelContent = {
+          type: "terminal",
+          sessionId,
+          size: 50,
+        };
         let newLayout: TerminalPanelContent;
 
         if (!tab.layout) {
@@ -1941,7 +2052,10 @@ export const useAppStore = create<AppState & AppActions>()(
             const newSize = 100 / (tab.layout.panels.length + 1);
             newLayout = {
               ...tab.layout,
-              panels: [...tab.layout.panels.map(p => ({ ...p, size: newSize })), { ...terminalNode, size: newSize }],
+              panels: [
+                ...tab.layout.panels.map((p) => ({ ...p, size: newSize })),
+                { ...terminalNode, size: newSize },
+              ],
             };
           } else {
             newLayout = {
@@ -1952,7 +2066,7 @@ export const useAppStore = create<AppState & AppActions>()(
           }
         }
 
-        const newTabs = current.tabs.map(t =>
+        const newTabs = current.tabs.map((t) =>
           t.id === tabId ? { ...t, layout: newLayout } : t
         );
 
@@ -1971,7 +2085,7 @@ export const useAppStore = create<AppState & AppActions>()(
     }),
     {
       name: "automaker-storage",
-      version: 1, // Increment when making breaking changes to persisted state
+      version: 2, // Increment when making breaking changes to persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<AppState>;
 
@@ -1980,6 +2094,21 @@ export const useAppStore = create<AppState & AppActions>()(
         if (version === 0) {
           if (state.keyboardShortcuts?.addContextFile === "F") {
             state.keyboardShortcuts.addContextFile = "N";
+          }
+        }
+
+        // Migration from version 1 to version 2:
+        // - Change terminal shortcut from "Cmd+`" to "T"
+        if (version <= 1) {
+          if (
+            state.keyboardShortcuts?.terminal === "Cmd+`" ||
+            state.keyboardShortcuts?.terminal === undefined
+          ) {
+            state.keyboardShortcuts = {
+              ...DEFAULT_KEYBOARD_SHORTCUTS,
+              ...state.keyboardShortcuts,
+              terminal: "T",
+            };
           }
         }
 
