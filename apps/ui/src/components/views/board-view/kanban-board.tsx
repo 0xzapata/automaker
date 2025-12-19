@@ -15,6 +15,7 @@ import { KanbanColumn, KanbanCard } from "./components";
 import { Feature } from "@/store/app-store";
 import { FastForward, Lightbulb, Archive } from "lucide-react";
 import { useKeyboardShortcutsConfig } from "@/hooks/use-keyboard-shortcuts";
+import { useResponsiveKanban } from "@/hooks/use-responsive-kanban";
 import { COLUMNS, ColumnId } from "./constants";
 
 interface KanbanBoardProps {
@@ -88,6 +89,9 @@ export function KanbanBoard({
   suggestionsCount,
   onArchiveAllVerified,
 }: KanbanBoardProps) {
+  // Use responsive column widths based on window size
+  const { columnWidth } = useResponsiveKanban(COLUMNS.length);
+
   return (
     <div
       className="flex-1 overflow-x-auto px-4 pb-4 relative"
@@ -99,7 +103,7 @@ export function KanbanBoard({
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
       >
-        <div className="flex gap-5 h-full min-w-max py-1">
+        <div className="flex gap-5 h-full py-1 justify-center">
           {COLUMNS.map((column) => {
             const columnFeatures = getColumnFeatures(column.id);
             return (
@@ -109,6 +113,7 @@ export function KanbanBoard({
                 title={column.title}
                 colorClass={column.colorClass}
                 count={columnFeatures.length}
+                width={columnWidth}
                 opacity={backgroundSettings.columnOpacity}
                 showBorder={backgroundSettings.columnBorderEnabled}
                 hideScrollbar={backgroundSettings.hideScrollbar}
@@ -225,7 +230,10 @@ export function KanbanBoard({
           }}
         >
           {activeFeature && (
-            <Card className="w-72 rotate-2 shadow-2xl shadow-black/25 border-primary/50 bg-card/95 backdrop-blur-sm transition-transform">
+            <Card
+              className="rotate-2 shadow-2xl shadow-black/25 border-primary/50 bg-card/95 backdrop-blur-sm transition-transform"
+              style={{ width: `${columnWidth}px` }}
+            >
               <CardHeader className="p-3">
                 <CardTitle className="text-sm font-medium line-clamp-2">
                   {activeFeature.description}

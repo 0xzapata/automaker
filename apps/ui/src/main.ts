@@ -259,10 +259,10 @@ async function waitForServer(maxAttempts = 30): Promise<void> {
 function createWindow(): void {
   const iconPath = getIconPath();
   const windowOptions: Electron.BrowserWindowConstructorOptions = {
-    width: 1400,
-    height: 900,
-    minWidth: 1024,
-    minHeight: 700,
+    width: 1600,
+    height: 950,
+    minWidth: 1280,
+    minHeight: 768,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,

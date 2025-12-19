@@ -14,6 +14,8 @@ interface KanbanColumnProps {
   opacity?: number;
   showBorder?: boolean;
   hideScrollbar?: boolean;
+  /** Custom width in pixels. If not provided, defaults to 288px (w-72) */
+  width?: number;
 }
 
 export const KanbanColumn = memo(function KanbanColumn({
@@ -26,17 +28,23 @@ export const KanbanColumn = memo(function KanbanColumn({
   opacity = 100,
   showBorder = true,
   hideScrollbar = false,
+  width,
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id });
+
+  // Use inline style for width if provided, otherwise use default w-72
+  const widthStyle = width ? { width: `${width}px`, flexShrink: 0 } : undefined;
 
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        "relative flex flex-col h-full rounded-xl transition-all duration-200 w-72",
+        "relative flex flex-col h-full rounded-xl transition-all duration-200",
+        !width && "w-72", // Only apply w-72 if no custom width
         showBorder && "border border-border/60",
         isOver && "ring-2 ring-primary/30 ring-offset-1 ring-offset-background"
       )}
+      style={widthStyle}
       data-testid={`kanban-column-${id}`}
     >
       {/* Background layer with opacity */}
