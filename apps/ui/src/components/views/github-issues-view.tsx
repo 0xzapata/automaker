@@ -64,6 +64,9 @@ export function GitHubIssuesView() {
   // Track revalidation confirmation dialog
   const [showRevalidateConfirm, setShowRevalidateConfirm] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Refs for stable event handler (avoids re-subscribing on state changes)
+  const selectedIssueRef = useRef<GitHubIssue | null>(null);
+  const showValidationDialogRef = useRef(false);
   const {
     currentProject,
     validationModel,
@@ -129,6 +132,8 @@ export function GitHubIssuesView() {
 
   // Load cached validations on mount
   useEffect(() => {
+    let isMounted = true;
+
     const loadCachedValidations = async () => {
       if (!currentProject?.path) return;
 
@@ -136,7 +141,7 @@ export function GitHubIssuesView() {
         const api = getElectronAPI();
         if (api.github?.getValidations) {
           const result = await api.github.getValidations(currentProject.path);
-          if (result.success && result.validations) {
+          if (isMounted && result.success && result.validations) {
             const map = new Map<number, StoredValidation>();
             for (const v of result.validations) {
               map.set(v.issueNumber, v);
@@ -145,15 +150,23 @@ export function GitHubIssuesView() {
           }
         }
       } catch (err) {
-        console.error('[GitHubIssuesView] Failed to load cached validations:', err);
+        if (isMounted) {
+          console.error('[GitHubIssuesView] Failed to load cached validations:', err);
+        }
       }
     };
 
     loadCachedValidations();
+
+    return () => {
+      isMounted = false;
+    };
   }, [currentProject?.path]);
 
   // Load running validations on mount (restore validatingIssues state)
   useEffect(() => {
+    let isMounted = true;
+
     const loadRunningValidations = async () => {
       if (!currentProject?.path) return;
 
@@ -161,17 +174,32 @@ export function GitHubIssuesView() {
         const api = getElectronAPI();
         if (api.github?.getValidationStatus) {
           const result = await api.github.getValidationStatus(currentProject.path);
-          if (result.success && result.runningIssues) {
+          if (isMounted && result.success && result.runningIssues) {
             setValidatingIssues(new Set(result.runningIssues));
           }
         }
       } catch (err) {
-        console.error('[GitHubIssuesView] Failed to load running validations:', err);
+        if (isMounted) {
+          console.error('[GitHubIssuesView] Failed to load running validations:', err);
+        }
       }
     };
 
     loadRunningValidations();
+
+    return () => {
+      isMounted = false;
+    };
   }, [currentProject?.path]);
+
+  // Keep refs in sync with state for stable event handler
+  useEffect(() => {
+    selectedIssueRef.current = selectedIssue;
+  }, [selectedIssue]);
+
+  useEffect(() => {
+    showValidationDialogRef.current = showValidationDialog;
+  }, [showValidationDialog]);
 
   // Subscribe to validation events
   useEffect(() => {
@@ -232,7 +260,10 @@ export function GitHubIssuesView() {
           }
 
           // If validation dialog is open for this issue, update the result
-          if (selectedIssue?.number === event.issueNumber && showValidationDialog) {
+          if (
+            selectedIssueRef.current?.number === event.issueNumber &&
+            showValidationDialogRef.current
+          ) {
             setValidationResult(event.result);
           }
           break;
@@ -246,7 +277,10 @@ export function GitHubIssuesView() {
           toast.error(`Validation failed for issue #${event.issueNumber}`, {
             description: event.error,
           });
-          if (selectedIssue?.number === event.issueNumber && showValidationDialog) {
+          if (
+            selectedIssueRef.current?.number === event.issueNumber &&
+            showValidationDialogRef.current
+          ) {
             setShowValidationDialog(false);
           }
           break;
@@ -255,7 +289,7 @@ export function GitHubIssuesView() {
 
     const unsubscribe = api.github.onValidationEvent(handleValidationEvent);
     return () => unsubscribe();
-  }, [currentProject?.path, selectedIssue, showValidationDialog, muteDoneSound]);
+  }, [currentProject?.path, muteDoneSound]);
 
   // Cleanup audio element on unmount to prevent memory leaks
   useEffect(() => {
