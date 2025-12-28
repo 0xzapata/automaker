@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAppStore } from '@/store/app-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,6 +36,7 @@ import {
   Loader2,
   ChevronDown,
   ChevronRight,
+  Code,
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -96,6 +97,11 @@ export function MCPServersSection() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [serverTestStates, setServerTestStates] = useState<Record<string, ServerTestState>>({});
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set());
+  const [jsonEditServer, setJsonEditServer] = useState<MCPServerConfig | null>(null);
+  const [jsonEditValue, setJsonEditValue] = useState('');
+  const [isGlobalJsonEditOpen, setIsGlobalJsonEditOpen] = useState(false);
+  const [globalJsonValue, setGlobalJsonValue] = useState('');
+  const autoTestedServersRef = useRef<Set<string>>(new Set());
 
   // Auto-load MCP servers from settings file on mount
   useEffect(() => {
@@ -104,23 +110,8 @@ export function MCPServersSection() {
     });
   }, []);
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-      const success = await loadMCPServersFromServer();
-      if (success) {
-        toast.success('MCP servers refreshed from settings');
-      } else {
-        toast.error('Failed to refresh MCP servers');
-      }
-    } catch (error) {
-      toast.error('Error refreshing MCP servers');
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
-  const handleTestServer = async (server: MCPServerConfig) => {
+  // Test a single server (extracted for reuse)
+  const testServer = useCallback(async (server: MCPServerConfig, silent = false) => {
     setServerTestStates((prev) => ({
       ...prev,
       [server.id]: { status: 'testing' },
@@ -141,9 +132,11 @@ export function MCPServersSection() {
         }));
         // Auto-expand to show tools
         setExpandedServers((prev) => new Set([...prev, server.id]));
-        toast.success(
-          `Connected to ${server.name} (${result.tools?.length || 0} tools, ${result.connectionTime}ms)`
-        );
+        if (!silent) {
+          toast.success(
+            `Connected to ${server.name} (${result.tools?.length || 0} tools, ${result.connectionTime}ms)`
+          );
+        }
       } else {
         setServerTestStates((prev) => ({
           ...prev,
@@ -153,7 +146,9 @@ export function MCPServersSection() {
             connectionTime: result.connectionTime,
           },
         }));
-        toast.error(`Failed to connect: ${result.error}`);
+        if (!silent) {
+          toast.error(`Failed to connect: ${result.error}`);
+        }
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -164,8 +159,46 @@ export function MCPServersSection() {
           error: errorMessage,
         },
       }));
-      toast.error(`Test failed: ${errorMessage}`);
+      if (!silent) {
+        toast.error(`Test failed: ${errorMessage}`);
+      }
     }
+  }, []);
+
+  // Auto-test all enabled servers on mount
+  useEffect(() => {
+    const enabledServers = mcpServers.filter((s) => s.enabled !== false);
+    const serversToTest = enabledServers.filter((s) => !autoTestedServersRef.current.has(s.id));
+
+    if (serversToTest.length > 0) {
+      // Mark all as being tested
+      serversToTest.forEach((s) => autoTestedServersRef.current.add(s.id));
+
+      // Test all servers in parallel (silently - no toast spam)
+      serversToTest.forEach((server) => {
+        testServer(server, true);
+      });
+    }
+  }, [mcpServers, testServer]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      const success = await loadMCPServersFromServer();
+      if (success) {
+        toast.success('MCP servers refreshed from settings');
+      } else {
+        toast.error('Failed to refresh MCP servers');
+      }
+    } catch (error) {
+      toast.error('Error refreshing MCP servers');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleTestServer = (server: MCPServerConfig) => {
+    testServer(server, false); // false = show toast notifications
   };
 
   const toggleServerExpanded = (serverId: string) => {
@@ -428,6 +461,233 @@ export function MCPServersSection() {
     toast.success('Copied to clipboard');
   };
 
+  const handleOpenJsonEdit = (server: MCPServerConfig) => {
+    // Build a clean config object for editing (excluding internal fields like id)
+    const editableConfig: Record<string, unknown> = {
+      name: server.name,
+      type: server.type || 'stdio',
+    };
+
+    if (server.description) {
+      editableConfig.description = server.description;
+    }
+
+    if (server.type === 'stdio' || !server.type) {
+      if (server.command) editableConfig.command = server.command;
+      if (server.args?.length) editableConfig.args = server.args;
+      if (server.env && Object.keys(server.env).length > 0) editableConfig.env = server.env;
+    } else {
+      if (server.url) editableConfig.url = server.url;
+      if (server.headers && Object.keys(server.headers).length > 0) {
+        editableConfig.headers = server.headers;
+      }
+    }
+
+    if (server.enabled === false) {
+      editableConfig.enabled = false;
+    }
+
+    setJsonEditValue(JSON.stringify(editableConfig, null, 2));
+    setJsonEditServer(server);
+  };
+
+  const handleSaveJsonEdit = async () => {
+    if (!jsonEditServer) return;
+
+    try {
+      const parsed = JSON.parse(jsonEditValue);
+
+      if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+        toast.error('Config must be a JSON object');
+        return;
+      }
+
+      // Validate required fields based on type
+      const serverType = parsed.type || 'stdio';
+
+      if (!parsed.name || typeof parsed.name !== 'string') {
+        toast.error('Name is required');
+        return;
+      }
+
+      if (serverType === 'stdio') {
+        if (!parsed.command || typeof parsed.command !== 'string') {
+          toast.error('Command is required for stdio servers');
+          return;
+        }
+      } else if (serverType === 'sse' || serverType === 'http') {
+        if (!parsed.url || typeof parsed.url !== 'string') {
+          toast.error('URL is required for SSE/HTTP servers');
+          return;
+        }
+      }
+
+      // Build update object
+      const updateData: Partial<MCPServerConfig> = {
+        name: parsed.name,
+        type: serverType,
+        description: parsed.description || undefined,
+        enabled: parsed.enabled !== false,
+      };
+
+      if (serverType === 'stdio') {
+        updateData.command = parsed.command;
+        updateData.args = Array.isArray(parsed.args) ? parsed.args : undefined;
+        updateData.env =
+          typeof parsed.env === 'object' && !Array.isArray(parsed.env) ? parsed.env : undefined;
+        // Clear HTTP fields
+        updateData.url = undefined;
+        updateData.headers = undefined;
+      } else {
+        updateData.url = parsed.url;
+        updateData.headers =
+          typeof parsed.headers === 'object' && !Array.isArray(parsed.headers)
+            ? parsed.headers
+            : undefined;
+        // Clear stdio fields
+        updateData.command = undefined;
+        updateData.args = undefined;
+        updateData.env = undefined;
+      }
+
+      updateMCPServer(jsonEditServer.id, updateData);
+      await syncSettingsToServer();
+
+      toast.success('Server configuration updated');
+      setJsonEditServer(null);
+      setJsonEditValue('');
+    } catch (error) {
+      toast.error('Invalid JSON: ' + (error instanceof Error ? error.message : 'Parse error'));
+    }
+  };
+
+  const handleOpenGlobalJsonEdit = () => {
+    // Build the full mcpServers config object
+    const exportData: Record<string, Record<string, unknown>> = {};
+
+    for (const server of mcpServers) {
+      const serverConfig: Record<string, unknown> = {
+        type: server.type || 'stdio',
+      };
+
+      if (server.description) {
+        serverConfig.description = server.description;
+      }
+
+      if (server.enabled === false) {
+        serverConfig.enabled = false;
+      }
+
+      if (server.type === 'stdio' || !server.type) {
+        serverConfig.command = server.command;
+        if (server.args?.length) serverConfig.args = server.args;
+        if (server.env && Object.keys(server.env).length > 0) serverConfig.env = server.env;
+      } else {
+        serverConfig.url = server.url;
+        if (server.headers && Object.keys(server.headers).length > 0) {
+          serverConfig.headers = server.headers;
+        }
+      }
+
+      exportData[server.name] = serverConfig;
+    }
+
+    setGlobalJsonValue(JSON.stringify({ mcpServers: exportData }, null, 2));
+    setIsGlobalJsonEditOpen(true);
+  };
+
+  const handleSaveGlobalJsonEdit = async () => {
+    try {
+      const parsed = JSON.parse(globalJsonValue);
+
+      // Support both formats
+      const servers = parsed.mcpServers || parsed;
+
+      if (typeof servers !== 'object' || Array.isArray(servers)) {
+        toast.error('Invalid format: expected object with server configurations');
+        return;
+      }
+
+      // Validate all servers first
+      for (const [name, config] of Object.entries(servers)) {
+        if (typeof config !== 'object' || config === null) {
+          toast.error(`Invalid config for "${name}"`);
+          return;
+        }
+
+        const serverConfig = config as Record<string, unknown>;
+        const serverType = (serverConfig.type as string) || 'stdio';
+
+        if (serverType === 'stdio') {
+          if (!serverConfig.command || typeof serverConfig.command !== 'string') {
+            toast.error(`Command is required for "${name}" (stdio)`);
+            return;
+          }
+        } else if (serverType === 'sse' || serverType === 'http') {
+          if (!serverConfig.url || typeof serverConfig.url !== 'string') {
+            toast.error(`URL is required for "${name}" (${serverType})`);
+            return;
+          }
+        }
+      }
+
+      // Create a map of existing servers by name for updating
+      const existingByName = new Map(mcpServers.map((s) => [s.name, s]));
+      const processedNames = new Set<string>();
+
+      // Update or add servers
+      for (const [name, config] of Object.entries(servers)) {
+        const serverConfig = config as Record<string, unknown>;
+        const serverType = (serverConfig.type as ServerType) || 'stdio';
+
+        const serverData: Omit<MCPServerConfig, 'id'> = {
+          name,
+          type: serverType,
+          description: (serverConfig.description as string) || undefined,
+          enabled: serverConfig.enabled !== false,
+        };
+
+        if (serverType === 'stdio') {
+          serverData.command = serverConfig.command as string;
+          if (Array.isArray(serverConfig.args)) {
+            serverData.args = serverConfig.args as string[];
+          }
+          if (typeof serverConfig.env === 'object' && serverConfig.env !== null) {
+            serverData.env = serverConfig.env as Record<string, string>;
+          }
+        } else {
+          serverData.url = serverConfig.url as string;
+          if (typeof serverConfig.headers === 'object' && serverConfig.headers !== null) {
+            serverData.headers = serverConfig.headers as Record<string, string>;
+          }
+        }
+
+        const existing = existingByName.get(name);
+        if (existing) {
+          updateMCPServer(existing.id, serverData);
+        } else {
+          addMCPServer(serverData);
+        }
+        processedNames.add(name);
+      }
+
+      // Remove servers that are no longer in the JSON
+      for (const server of mcpServers) {
+        if (!processedNames.has(server.name)) {
+          removeMCPServer(server.id);
+        }
+      }
+
+      await syncSettingsToServer();
+
+      toast.success('MCP servers configuration updated');
+      setIsGlobalJsonEditOpen(false);
+      setGlobalJsonValue('');
+    } catch (error) {
+      toast.error('Invalid JSON: ' + (error instanceof Error ? error.message : 'Parse error'));
+    }
+  };
+
   return (
     <div
       className={cn(
@@ -462,15 +722,26 @@ export function MCPServersSection() {
               <RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />
             </Button>
             {mcpServers.length > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleExportJson}
-                data-testid="export-mcp-servers-button"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Export
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleExportJson}
+                  data-testid="export-mcp-servers-button"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Export
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleOpenGlobalJsonEdit}
+                  data-testid="edit-all-json-button"
+                >
+                  <Code className="w-4 h-4 mr-2" />
+                  Edit JSON
+                </Button>
+              </>
             )}
             <Button
               size="sm"
@@ -644,6 +915,15 @@ export function MCPServersSection() {
                           onCheckedChange={() => handleToggleEnabled(server)}
                           data-testid={`mcp-server-toggle-${server.id}`}
                         />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenJsonEdit(server)}
+                          title="Edit JSON"
+                          data-testid={`mcp-server-json-${server.id}`}
+                        >
+                          <Code className="w-4 h-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -873,6 +1153,112 @@ export function MCPServersSection() {
             >
               <FileJson className="w-4 h-4 mr-2" />
               Import
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* JSON Edit Dialog */}
+      <Dialog
+        open={!!jsonEditServer}
+        onOpenChange={(open) => {
+          if (!open) {
+            setJsonEditServer(null);
+            setJsonEditValue('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl" data-testid="mcp-json-edit-dialog">
+          <DialogHeader>
+            <DialogTitle>Edit Server Configuration</DialogTitle>
+            <DialogDescription>
+              Edit the raw JSON configuration for "{jsonEditServer?.name}". Changes will be
+              validated before saving.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Textarea
+              value={jsonEditValue}
+              onChange={(e) => setJsonEditValue(e.target.value)}
+              placeholder="Server configuration JSON..."
+              className="font-mono text-sm h-80"
+              data-testid="mcp-json-edit-textarea"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setJsonEditServer(null);
+                setJsonEditValue('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveJsonEdit}
+              disabled={!jsonEditValue.trim()}
+              data-testid="mcp-json-edit-save-button"
+            >
+              <Code className="w-4 h-4 mr-2" />
+              Save JSON
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Global JSON Edit Dialog */}
+      <Dialog
+        open={isGlobalJsonEditOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsGlobalJsonEditOpen(false);
+            setGlobalJsonValue('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-3xl max-h-[90vh]" data-testid="mcp-global-json-edit-dialog">
+          <DialogHeader>
+            <DialogTitle>Edit All MCP Servers</DialogTitle>
+            <DialogDescription>
+              Edit the full MCP servers configuration. Add, modify, or remove servers directly in
+              JSON. Servers removed from JSON will be deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Textarea
+              value={globalJsonValue}
+              onChange={(e) => setGlobalJsonValue(e.target.value)}
+              placeholder={`{
+  "mcpServers": {
+    "server-name": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-name"]
+    }
+  }
+}`}
+              className="font-mono text-sm h-[50vh] min-h-[300px]"
+              data-testid="mcp-global-json-edit-textarea"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsGlobalJsonEditOpen(false);
+                setGlobalJsonValue('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveGlobalJsonEdit}
+              disabled={!globalJsonValue.trim()}
+              data-testid="mcp-global-json-edit-save-button"
+            >
+              <Code className="w-4 h-4 mr-2" />
+              Save All
             </Button>
           </DialogFooter>
         </DialogContent>
