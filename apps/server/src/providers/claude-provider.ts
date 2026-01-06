@@ -107,6 +107,10 @@ export class ClaudeProvider extends BaseProvider {
       ...(options.mcpServers && { mcpServers: options.mcpServers }),
       // Extended thinking configuration
       ...(maxThinkingTokens && { maxThinkingTokens }),
+      // Capture stderr for debugging subprocess failures
+      stderr: (data: string) => {
+        logger.error('[SDK stderr]', data.trim());
+      },
     };
 
     // Build prompt payload
