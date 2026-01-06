@@ -194,3 +194,22 @@ export type {
   IdeationStreamEvent,
   IdeationAnalysisEvent,
 } from './ideation.js';
+
+// Provider Profile types
+export type {
+  ProviderProfileType,
+  ConnectionTestResult,
+  ModelMappingEntry,
+  ProviderProfile,
+  CreateProviderProfileInput,
+  UpdateProviderProfileInput,
+  ProviderProfileList,
+  SsrfValidationResult,
+} from './provider-profile.js';
+export {
+  DEFAULT_PROVIDER_TIMEOUT,
+  DEFAULT_RATE_LIMIT_RPM,
+  validateBaseUrlSsrf,
+  mapModelToRemote,
+  mapModelFromRemote,
+} from './provider-profile.js';

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Feature } from '@/store/app-store';
 import { cn } from '@/lib/utils';
+import { stripMarkdown } from '@/lib/markdown-utils';
 import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -46,6 +47,12 @@ export function CardHeaderSection({
 }: CardHeaderProps) {
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  // Memoize the stripped description to avoid recalculating on every render
+  const strippedDescription = useMemo(() => {
+    const rawDescription = feature.description || feature.summary || feature.id;
+    return stripMarkdown(rawDescription);
+  }, [feature.description, feature.summary, feature.id]);
 
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -324,7 +331,7 @@ export function CardHeaderSection({
               !isDescriptionExpanded && 'line-clamp-3'
             )}
           >
-            {feature.description || feature.summary || feature.id}
+            {strippedDescription}
           </CardDescription>
           {(feature.description || feature.summary || '').length > 100 && (
             <button

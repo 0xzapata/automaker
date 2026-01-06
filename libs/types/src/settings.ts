@@ -10,6 +10,7 @@ import type { ModelAlias } from './model.js';
 import type { CursorModelId } from './cursor-models.js';
 import { CURSOR_MODEL_MAP, getAllCursorModelIds } from './cursor-models.js';
 import type { PromptCustomization } from './prompts.js';
+import type { ProviderProfile } from './provider-profile.js';
 
 // Re-export ModelAlias for convenience
 export type { ModelAlias };
@@ -483,6 +484,10 @@ export interface GlobalSettings {
   /** List of configured MCP servers for agent use */
   mcpServers: MCPServerConfig[];
 
+  // Provider Profile Configuration
+  /** List of configured provider profiles for proxy/custom API endpoints */
+  providerProfiles: ProviderProfile[];
+
   // Prompt Customization
   /** Custom prompts for Auto Mode, Agent Runner, Backlog Planning, and Enhancements */
   promptCustomization?: PromptCustomization;
@@ -610,7 +615,7 @@ export const DEFAULT_PHASE_MODELS: PhaseModelConfig = {
 };
 
 /** Current version of the global settings schema */
-export const SETTINGS_VERSION = 3;
+export const SETTINGS_VERSION = 4;
 /** Current version of the credentials schema */
 export const CREDENTIALS_VERSION = 1;
 /** Current version of the project settings schema */
@@ -675,6 +680,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   enableSandboxMode: false,
   skipSandboxWarning: false,
   mcpServers: [],
+  providerProfiles: [],
 };
 
 /** Default credentials (empty strings - user must provide API keys) */
