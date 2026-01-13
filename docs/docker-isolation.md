@@ -136,12 +136,11 @@ volumes:
 
 ## Troubleshooting
 
-| Problem               | Solution                                                                                                                                          |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Container won't start | Check `.env` has `ANTHROPIC_API_KEY` set. Run `docker-compose logs` for errors.                                                                   |
-| Can't access web UI   | Verify container is running with `docker ps \| grep automaker`                                                                                    |
-| Need a fresh start    | Run `docker-compose down && docker volume rm automaker-data && docker-compose up -d --build`                                                      |
-| Cursor auth fails     | Re-extract token with `./scripts/get-cursor-token.sh` - tokens expire periodically. Make sure you've run `cursor-agent login` on your host first. |
-| OpenCode not detected | Mount `~/.local/share/opencode` to `/home/automaker/.local/share/opencode`. Make sure you've run `opencode auth login` on your host first.        |
+| Problem                | Solution                                                                                                                                                                      |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Container won't start  | Check `.env` has `ANTHROPIC_API_KEY` set. Run `docker-compose logs` for errors.                                                                                               |
+| Can't access web UI    | Verify container is running with `docker ps \| grep automaker`                                                                                                                |
+| Need a fresh start     | Run `docker-compose down && docker volume rm automaker-data && docker-compose up -d --build`                                                                                  |
+| Cursor auth fails      | Re-extract token with `./scripts/get-cursor-token.sh` - tokens expire periodically. Make sure you've run `cursor-agent login` on your host first.                             |
+| OpenCode not detected  | Mount `~/.local/share/opencode` to `/home/automaker/.local/share/opencode`. Make sure you've run `opencode auth login` on your host first.                                    |
 | File permission errors | Rebuild with `UID=$(id -u) GID=$(id -g) docker-compose build` to match container user to your host user. See [Fixing File Permission Issues](#fixing-file-permission-issues). |
-
