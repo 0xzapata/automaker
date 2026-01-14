@@ -36,6 +36,15 @@ services:
       # Required
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 
+      # Optional - Anthropic API Base URL (for proxies like ProxyPal)
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
+
+      # Optional - Model overrides (for custom model routing)
+      - ANTHROPIC_MODEL_SONNET=${ANTHROPIC_MODEL_SONNET:-}
+      - ANTHROPIC_MODEL_OPUS=${ANTHROPIC_MODEL_OPUS:-}
+      - ANTHROPIC_MODEL_HAIKU=${ANTHROPIC_MODEL_HAIKU:-}
+      - ANTHROPIC_MODEL_DEFAULT=${ANTHROPIC_MODEL_DEFAULT:-}
+
       # Optional - Claude CLI OAuth credentials (for macOS users)
       # Extract with: ./scripts/get-claude-token.sh
       # This writes the OAuth tokens to ~/.claude/.credentials.json in the container

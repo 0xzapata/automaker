@@ -98,7 +98,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
           data-slot="dialog-content"
           className={cn(
             'fixed top-[50%] left-[50%] z-50 translate-x-[-50%] translate-y-[-50%]',
-            'flex flex-col w-full max-w-[calc(100%-2rem)] max-h-[calc(100vh-4rem)]',
+            'flex flex-col w-full max-h-[calc(100vh-4rem)]',
             'bg-card border border-border rounded-xl shadow-2xl',
             // Premium shadow
             'shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)]',
@@ -108,7 +108,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
             'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
             'data-[state=closed]:slide-out-to-top-[2%] data-[state=open]:slide-in-from-top-[2%]',
             'duration-200',
-            compact ? 'max-w-4xl p-4' : !hasCustomMaxWidth ? 'sm:max-w-2xl p-6' : 'p-6',
+            compact ? (!hasCustomMaxWidth ? 'sm:max-w-2xl p-6' : 'p-6') : 'max-w-[90vw] h-[90vh] p-6',
             className
           )}
           {...props}

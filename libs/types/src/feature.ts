@@ -27,6 +27,7 @@ export interface Feature {
   titleGenerating?: boolean;
   category: string;
   description: string;
+  descriptionFormat?: 'plaintext' | 'markdown'; // Format of the description field
   passes?: boolean;
   priority?: number;
   status?: string;

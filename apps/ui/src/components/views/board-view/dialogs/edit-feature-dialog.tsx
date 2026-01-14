@@ -307,145 +307,158 @@ export function EditFeatureDialog({
           </TabsList>
 
           {/* Prompt Tab */}
-          <TabsContent value="prompt" className="space-y-4 overflow-y-auto cursor-default">
-            <div className="space-y-2">
-              <Label htmlFor="edit-description">Description</Label>
-              <DescriptionImageDropZone
-                value={editingFeature.description}
-                onChange={(value) =>
-                  setEditingFeature({
-                    ...editingFeature,
-                    description: value,
-                  })
-                }
-                images={editingFeature.imagePaths ?? []}
-                onImagesChange={(images) =>
-                  setEditingFeature({
-                    ...editingFeature,
-                    imagePaths: images,
-                  })
-                }
-                textFiles={editingFeature.textFilePaths ?? []}
-                onTextFilesChange={(textFiles) =>
-                  setEditingFeature({
-                    ...editingFeature,
-                    textFilePaths: textFiles,
-                  })
-                }
-                placeholder="Describe the feature..."
-                previewMap={editFeaturePreviewMap}
-                onPreviewMapChange={setEditFeaturePreviewMap}
-                data-testid="edit-feature-description"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-title">Title (optional)</Label>
-              <Input
-                id="edit-title"
-                value={editingFeature.title ?? ''}
-                onChange={(e) =>
-                  setEditingFeature({
-                    ...editingFeature,
-                    title: e.target.value,
-                  })
-                }
-                placeholder="Leave blank to auto-generate"
-                data-testid="edit-feature-title"
-              />
-            </div>
-            <div className="flex w-fit items-center gap-3 select-none cursor-default">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="w-[180px] justify-between">
-                    {enhancementMode === 'improve' && 'Improve Clarity'}
-                    {enhancementMode === 'technical' && 'Add Technical Details'}
-                    {enhancementMode === 'simplify' && 'Simplify'}
-                    {enhancementMode === 'acceptance' && 'Add Acceptance Criteria'}
-                    <ChevronDown className="w-4 h-4 ml-2" />
+          <TabsContent value="prompt" className="flex-1 overflow-hidden cursor-default flex flex-col">
+            {/* Two-column grid layout - fills remaining space */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 min-h-0">
+              {/* Left Column - Description (spans 2 rows and fills height) */}
+              <div className="flex flex-col gap-2 md:row-span-2 min-h-0">
+                <Label htmlFor="edit-description">Description</Label>
+                <div className="flex-1 min-h-0">
+                  <DescriptionImageDropZone
+                    value={editingFeature.description}
+                    onChange={(value) =>
+                      setEditingFeature({
+                        ...editingFeature,
+                        description: value,
+                      })
+                    }
+                    images={editingFeature.imagePaths ?? []}
+                    onImagesChange={(images) =>
+                      setEditingFeature({
+                        ...editingFeature,
+                        imagePaths: images,
+                      })
+                    }
+                    textFiles={editingFeature.textFilePaths ?? []}
+                    onTextFilesChange={(textFiles) =>
+                      setEditingFeature({
+                        ...editingFeature,
+                        textFilePaths: textFiles,
+                      })
+                    }
+                    placeholder="Describe the feature..."
+                    previewMap={editFeaturePreviewMap}
+                    onPreviewMapChange={setEditFeaturePreviewMap}
+                    data-testid="edit-feature-description"
+                    className="h-full"
+                  />
+                </div>
+              </div>
+
+              {/* Right Column - Title and other fields */}
+              <div className="space-y-4 overflow-y-auto">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-title">Title (optional)</Label>
+                  <Input
+                    id="edit-title"
+                    value={editingFeature.title ?? ''}
+                    onChange={(e) =>
+                      setEditingFeature({
+                        ...editingFeature,
+                        title: e.target.value,
+                      })
+                    }
+                    placeholder="Leave blank to auto-generate"
+                    data-testid="edit-feature-title"
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 select-none cursor-default">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="w-[180px] justify-between">
+                        {enhancementMode === 'improve' && 'Improve Clarity'}
+                        {enhancementMode === 'technical' && 'Add Technical Details'}
+                        {enhancementMode === 'simplify' && 'Simplify'}
+                        {enhancementMode === 'acceptance' && 'Add Acceptance Criteria'}
+                        <ChevronDown className="w-4 h-4 ml-2" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem onClick={() => setEnhancementMode('improve')}>
+                        Improve Clarity
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setEnhancementMode('technical')}>
+                        Add Technical Details
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setEnhancementMode('simplify')}>
+                        Simplify
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setEnhancementMode('acceptance')}>
+                        Add Acceptance Criteria
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleEnhanceDescription}
+                    disabled={!editingFeature.description.trim() || isEnhancing}
+                    loading={isEnhancing}
+                  >
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Enhance with AI
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem onClick={() => setEnhancementMode('improve')}>
-                    Improve Clarity
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setEnhancementMode('technical')}>
-                    Add Technical Details
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setEnhancementMode('simplify')}>
-                    Simplify
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setEnhancementMode('acceptance')}>
-                    Add Acceptance Criteria
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleEnhanceDescription}
-                disabled={!editingFeature.description.trim() || isEnhancing}
-                loading={isEnhancing}
-              >
-                <Sparkles className="w-4 h-4 mr-2" />
-                Enhance with AI
-              </Button>
+                  <ModelOverrideTrigger
+                    currentModelEntry={enhancementOverride.effectiveModelEntry}
+                    onModelChange={enhancementOverride.setOverride}
+                    phase="enhancementModel"
+                    isOverridden={enhancementOverride.isOverridden}
+                    size="sm"
+                    variant="icon"
+                  />
+                </div>
 
-              <ModelOverrideTrigger
-                currentModelEntry={enhancementOverride.effectiveModelEntry}
-                onModelChange={enhancementOverride.setOverride}
-                phase="enhancementModel"
-                isOverridden={enhancementOverride.isOverridden}
-                size="sm"
-                variant="icon"
-              />
+                <div className="space-y-2">
+                  <Label htmlFor="edit-category">Category (optional)</Label>
+                  <CategoryAutocomplete
+                    value={editingFeature.category}
+                    onChange={(value) =>
+                      setEditingFeature({
+                        ...editingFeature,
+                        category: value,
+                      })
+                    }
+                    suggestions={categorySuggestions}
+                    placeholder="e.g., Core, UI, API"
+                    data-testid="edit-feature-category"
+                  />
+                </div>
+
+                <PrioritySelector
+                  selectedPriority={editingFeature.priority ?? 2}
+                  onPrioritySelect={(priority) =>
+                    setEditingFeature({
+                      ...editingFeature,
+                      priority,
+                    })
+                  }
+                  testIdPrefix="edit-priority"
+                />
+
+                {useWorktrees && (
+                  <BranchSelector
+                    useCurrentBranch={useCurrentBranch}
+                    onUseCurrentBranchChange={setUseCurrentBranch}
+                    branchName={editingFeature.branchName ?? ''}
+                    onBranchNameChange={(value) =>
+                      setEditingFeature({
+                        ...editingFeature,
+                        branchName: value,
+                      })
+                    }
+                    branchSuggestions={branchSuggestions}
+                    branchCardCounts={branchCardCounts}
+                    currentBranch={currentBranch}
+                    disabled={editingFeature.status !== 'backlog'}
+                    testIdPrefix="edit-feature"
+                  />
+                )}
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-category">Category (optional)</Label>
-              <CategoryAutocomplete
-                value={editingFeature.category}
-                onChange={(value) =>
-                  setEditingFeature({
-                    ...editingFeature,
-                    category: value,
-                  })
-                }
-                suggestions={categorySuggestions}
-                placeholder="e.g., Core, UI, API"
-                data-testid="edit-feature-category"
-              />
-            </div>
-            {useWorktrees && (
-              <BranchSelector
-                useCurrentBranch={useCurrentBranch}
-                onUseCurrentBranchChange={setUseCurrentBranch}
-                branchName={editingFeature.branchName ?? ''}
-                onBranchNameChange={(value) =>
-                  setEditingFeature({
-                    ...editingFeature,
-                    branchName: value,
-                  })
-                }
-                branchSuggestions={branchSuggestions}
-                branchCardCounts={branchCardCounts}
-                currentBranch={currentBranch}
-                disabled={editingFeature.status !== 'backlog'}
-                testIdPrefix="edit-feature"
-              />
-            )}
-
-            {/* Priority Selector */}
-            <PrioritySelector
-              selectedPriority={editingFeature.priority ?? 2}
-              onPrioritySelect={(priority) =>
-                setEditingFeature({
-                  ...editingFeature,
-                  priority,
-                })
-              }
-              testIdPrefix="edit-priority"
-            />
           </TabsContent>
 
           {/* Model Tab */}

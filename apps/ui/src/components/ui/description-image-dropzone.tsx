@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 const logger = createLogger('DescriptionImageDropZone');
 import { ImageIcon, X, Loader2, FileText } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { getElectronAPI } from '@/lib/electron';
 import { getAuthenticatedImageUrl } from '@/lib/api-fetch';
 import { useAppStore, type FeatureImagePath, type FeatureTextFilePath } from '@/store/app-store';
@@ -47,6 +48,7 @@ interface DescriptionImageDropZoneProps {
   onPreviewMapChange?: (map: ImagePreviewMap) => void;
   autoFocus?: boolean;
   error?: boolean; // Show error state with red border
+  useMarkdown?: boolean; // Enable markdown editor mode
 }
 
 export function DescriptionImageDropZone({
@@ -65,6 +67,7 @@ export function DescriptionImageDropZone({
   onPreviewMapChange,
   autoFocus = false,
   error = false,
+  useMarkdown = true, // Default to markdown mode
 }: DescriptionImageDropZoneProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -365,7 +368,7 @@ export function DescriptionImageDropZone({
   );
 
   return (
-    <div className={cn('relative', className)}>
+    <div className="relative h-full flex flex-col">
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -383,7 +386,7 @@ export function DescriptionImageDropZone({
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
-        className={cn('relative rounded-md transition-all duration-200', {
+        className={cn('relative rounded-md transition-all duration-200 flex-1', {
           'ring-2 ring-blue-400 ring-offset-2 ring-offset-background': isDragOver && !disabled,
         })}
       >
@@ -400,22 +403,45 @@ export function DescriptionImageDropZone({
           </div>
         )}
 
-        {/* Textarea */}
-        <Textarea
-          placeholder={placeholder}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onPaste={handlePaste}
-          disabled={disabled}
-          autoFocus={autoFocus}
-          aria-invalid={error}
-          className={cn('min-h-[120px]', isProcessing && 'opacity-50 pointer-events-none')}
-          data-testid="feature-description-input"
-        />
+        {/* Editor - Rich Text or Textarea */}
+        {useMarkdown ? (
+          <div onPaste={handlePaste}>
+            <RichTextEditor
+              value={value}
+              onChange={onChange}
+              placeholder={placeholder}
+              disabled={disabled || isProcessing}
+              autoFocus={autoFocus}
+              className={cn(
+                isProcessing && 'opacity-50 pointer-events-none',
+                className?.includes('h-full') ? 'h-full' : '',
+                error && 'border-destructive'
+              )}
+              height={className?.includes('h-full') ? '100%' : '400px'}
+            />
+          </div>
+        ) : (
+          <Textarea
+            placeholder={placeholder}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onPaste={handlePaste}
+            disabled={disabled}
+            autoFocus={autoFocus}
+            aria-invalid={error}
+            className={cn(
+              isProcessing && 'opacity-50 pointer-events-none',
+              className?.includes('h-full') ? 'h-full' : 'min-h-[120px]',
+              className
+            )}
+            data-testid="feature-description-input"
+          />
+        )}
       </div>
 
       {/* Hint text */}
       <p className="text-xs text-muted-foreground mt-1">
+        {useMarkdown && 'Rich text editor enabled. '}
         Paste, drag and drop files, or{' '}
         <button
           type="button"

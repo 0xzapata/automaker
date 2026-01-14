@@ -77,3 +77,31 @@ export async function buildPromptWithImages(
 
   return { content, hasImages: true };
 }
+
+/**
+ * Strip HTML tags from a string, preserving plain text content
+ * Useful for cleaning rich text editor output before sending to AI agents
+ *
+ * @param html - HTML string to strip tags from
+ * @returns Plain text with HTML tags removed
+ */
+export function stripHtmlTags(html: string): string {
+  if (!html) return '';
+
+  // Remove HTML tags
+  let text = html.replace(/<[^>]+>/g, '');
+
+  // Decode common HTML entities
+  text = text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+
+  // Clean up multiple spaces and newlines
+  text = text.replace(/\s+/g, ' ').trim();
+
+  return text;
+}

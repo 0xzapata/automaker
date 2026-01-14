@@ -35,6 +35,7 @@ export {
 // Prompt building
 export {
   buildPromptWithImages,
+  stripHtmlTags,
   type PromptContent,
   type PromptWithImages,
 } from './prompt-builder.js';

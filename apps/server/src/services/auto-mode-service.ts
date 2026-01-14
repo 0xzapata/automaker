@@ -22,6 +22,7 @@ import type {
 import { DEFAULT_PHASE_MODELS } from '@automaker/types';
 import {
   buildPromptWithImages,
+  stripHtmlTags,
   isAbortError,
   classifyError,
   loadContextFiles,
@@ -1848,12 +1849,14 @@ Format your response as a structured markdown document.`;
 
   private buildFeaturePrompt(feature: Feature): string {
     const title = this.extractTitleFromDescription(feature.description);
+    // Strip HTML tags from description before sending to AI agents
+    const cleanDescription = stripHtmlTags(feature.description);
 
     let prompt = `## Feature Implementation Task
 
 **Feature ID:** ${feature.id}
 **Title:** ${title}
-**Description:** ${feature.description}
+**Description:** ${cleanDescription}
 `;
 
     if (feature.spec) {
